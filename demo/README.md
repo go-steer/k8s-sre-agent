@@ -1,20 +1,25 @@
-# core-agent-sre-demo
+# demo
 
 Scripts for running the SRE agent end to end on a laptop: a throwaway cluster, a
 fault you inject on purpose, the monitoring loop noticing it, and a digest
 landing in chat.
 
-Nothing here is a library. It is the place the pieces meet, because they live in
-separate repos and cannot be one module — `k8s-lookout` depends on `core-agent`
-and ADK v1, while `core-sre-agent` is on `mast` and ADK v2, and linking both
-majors into one binary is what `core-sre-agent`'s consume-lookout-over-MCP rule
-exists to prevent.
+Nothing here is a library, and nothing here imports the agent. It builds each
+binary by shelling `go build` in the module that owns it and drops them all in
+one `bin/`, which is the only thing the pieces need in common — `k8s-lookout` is
+a subprocess and switchboard is an HTTP service, so neither is a Go dependency
+of anything here. That is not incidental for lookout: it depends on `core-agent`
+and ADK v1 while this repo is on `mast` and ADK v2, and linking both majors into
+one binary is what the consume-lookout-over-MCP rule exists to prevent.
 
 ```
-../core-sre-agent     the agent, the bounded pass, the scheduler
-../k8s-lookout        the read path, consumed as a subprocess
-../switchboard        the chat gateway (optional — see "Chat")
+..                    the agent, the bounded pass, the scheduler (this repo)
+../../k8s-lookout     the read path, consumed as a subprocess
+../../switchboard     the chat gateway (optional — see "Chat")
 ```
+
+The one Go package here, `tools/fake-ingress`, is stdlib-only and belongs to
+this repo's module.
 
 ## Quick start
 
@@ -117,7 +122,7 @@ Every one is an env var with a default, in `scripts/common.sh`:
 
 | | |
 |---|---|
-| `SRE_SRC`, `LOOKOUT_SRC`, `SWITCHBOARD_SRC` | Sibling checkouts. |
+| `SRE_SRC`, `LOOKOUT_SRC`, `SWITCHBOARD_SRC` | Where the sources are. `SRE_SRC` defaults to this repo, one level up; the other two to sibling checkouts. |
 | `CLUSTER_NAME` | Must start with `sre-demo` — `cluster.sh down` refuses anything else. |
 | `DEMO_NS` | Namespace the workloads go in. |
 | `SLACK_ENV` | Path to the Slack credentials file. Default `scripts/slack.env`; its presence is the real-Slack switch. |
@@ -133,8 +138,8 @@ current *and* describes exactly one context. Every `kubectl` goes through `kc`,
 which passes `--kubeconfig` and `--context` on every call. `cluster.sh down`
 refuses a name without the `sre-demo` prefix.
 
-That is the same four layers `core-sre-agent`'s `internal/kindcluster` applies,
-for the same reason: a rule enforced only by remembering it is not enforced.
+That is the same four layers `../internal/kindcluster` applies, for the same
+reason: a rule enforced only by remembering it is not enforced.
 
 ## Cost
 

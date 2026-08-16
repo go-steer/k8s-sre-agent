@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Build every binary the demo needs into bin/.
 #
-# Four binaries from three sibling checkouts, because the demo is the only place
-# they all meet. They cannot be one module and should not try to be:
-# k8s-lookout depends on core-agent, which is on ADK v1, while core-sre-agent is
-# on mast and ADK v2 — linking both majors into one binary is exactly what
-# core-sre-agent's "consume lookout over MCP" rule exists to prevent. Separate
-# modules, separate builds, one bin/ directory.
+# Six binaries from three modules, because the demo is the only place they all
+# meet. Three come from this repo, one from switchboard, and one from
+# k8s-lookout — and that last one cannot join the others: k8s-lookout depends on
+# core-agent, which is on ADK v1, while this repo is on mast and ADK v2, and
+# linking both majors into one binary is exactly what the "consume lookout over
+# MCP" rule exists to prevent. Separate modules, separate builds, one bin/
+# directory.
 #
 #   ./scripts/build.sh            # everything
 #   ./scripts/build.sh sre-monitor lookout
@@ -24,7 +25,7 @@ declare -A TARGETS=(
   [sre-eval-live]="$SRE_SRC::./cmd/sre-eval-live"
   [lookout]="$LOOKOUT_SRC::./cmd/lookout"
   [switchboard]="$SWITCHBOARD_SRC::./cmd/switchboard"
-  [fake-ingress]="$ROOT::./tools/fake-ingress"
+  [fake-ingress]="$SRE_SRC::./demo/tools/fake-ingress"
 )
 
 build_one() {

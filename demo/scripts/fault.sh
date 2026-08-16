@@ -6,9 +6,10 @@
 #   ./scripts/fault.sh list
 #
 # Each fault waits until it is actually observable before returning. That is
-# the same rule core-sre-agent's fixtures follow and it matters for the same
-# reason: a demo that says "broken" while the cluster still looks fine gets a
-# correct "healthy" from the next cycle and looks like the agent missed it.
+# the same rule this repo's internal/faults fixtures follow and it matters for
+# the same reason: a demo that says "broken" while the cluster still looks fine
+# gets a correct "healthy" from the next cycle and looks like the agent missed
+# it.
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
@@ -60,7 +61,7 @@ inject_silent() {
   # The container produces the failure rather than describing it. Echoing
   # "ERROR: connection refused" on a timer would put the whole diagnosis in
   # spec.containers[].command, where any tool that reads a spec hands it back —
-  # core-sre-agent's fault-invoicing fixture scored a perfect 1.00 that way
+  # internal/faults' fault-invoicing fixture scored a perfect 1.00 that way
   # without ever reading a log, which measured nothing.
   kc -n "$DEMO_NS" patch deploy/storefront-web --type=json -p '[
     {"op":"replace","path":"/spec/template/spec/containers/0/command","value":

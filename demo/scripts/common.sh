@@ -6,7 +6,7 @@
 # ones. So nothing here ever resolves the ambient current-context: KUBECONFIG
 # points at a file we generated, every kubectl call passes --context
 # explicitly, and the cluster name carries a prefix that the teardown checks
-# before it deletes anything. Same four layers core-sre-agent's
+# before it deletes anything. Same four layers this repo's
 # internal/kindcluster applies for the same reason — a rule enforced only by
 # remembering it is not enforced.
 
@@ -16,10 +16,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$ROOT/bin"
 RUN="$ROOT/run"
 
-# Sibling checkouts. Override if yours live elsewhere.
-SRE_SRC="${SRE_SRC:-$ROOT/../core-sre-agent}"
-LOOKOUT_SRC="${LOOKOUT_SRC:-$ROOT/../k8s-lookout}"
-SWITCHBOARD_SRC="${SWITCHBOARD_SRC:-$ROOT/../switchboard}"
+# Where the sources are. The agent is this repo, one level up; the other two
+# are sibling checkouts. Override if yours live elsewhere.
+SRE_SRC="${SRE_SRC:-$ROOT/..}"
+LOOKOUT_SRC="${LOOKOUT_SRC:-$ROOT/../../k8s-lookout}"
+SWITCHBOARD_SRC="${SWITCHBOARD_SRC:-$ROOT/../../switchboard}"
 
 # The throwaway cluster. The prefix is load-bearing: cluster.sh down refuses
 # any name without it, so a typo cannot delete a cluster somebody needs.

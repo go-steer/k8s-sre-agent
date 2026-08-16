@@ -4,7 +4,7 @@
 /bin/*
 !/bin/.gitkeep
 
-# `go build ./tools/...` from the repo root drops binaries here rather than in
+# `go build ./tools/...` from this directory drops binaries here rather than in
 # bin/. Ignored so one absent-minded build does not get committed.
 /fake-ingress
 

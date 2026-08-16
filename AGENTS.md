@@ -1422,7 +1422,20 @@ SRE_LOOKOUT_BIN=/tmp/lookout go run ./cmd/sre-eval-live -bounded -v
 # serialized — so a change to an evaluator or to failureFamilies/genericReasons
 # is measurable against every run ever recorded, before it is believed.
 go run ./dev/rescore /tmp/eval-live-*.json
+
+# The whole loop on a laptop: throwaway cluster, a fault injected on purpose,
+# the monitor noticing it, a digest in chat. See demo/README.md.
+demo/scripts/build.sh && demo/scripts/cluster.sh up
+demo/scripts/monitor.sh --once --quiet-ok
 ```
+
+`demo/` is the only place the three binaries meet — this repo's `sre-monitor`,
+the `lookout` subprocess and `switchboard` — and it is here rather than in its
+own repo because nothing in it is a Go dependency of anything: it builds each
+binary by shelling `go build` in the module that owns it. Its one Go package,
+`demo/tools/fake-ingress`, is stdlib-only and part of this module. Co-location
+is what keeps `monitor.sh` from drifting away from the `sre-monitor` flags it
+passes, which is the failure that argued for folding it in.
 
 All three commands print what the run cost, per model and per agent, and all
 three take `-max-cost` (USD) and `-max-turns` (model calls) to bound one
