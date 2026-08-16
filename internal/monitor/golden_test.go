@@ -8,6 +8,8 @@ import (
 	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
+//go:generate python3 ../../dev/diffcheck.py
+
 // TestGoldenAgainstPython is the differential fidelity check: every vector in
 // testdata/golden.json was produced by executing the upstream Python
 // monitor_state.py, so a mismatch here means the Go port and the Python
@@ -15,7 +17,11 @@ import (
 // invisible at runtime and would corrupt both the monitoring diff and any
 // eval scored across the two implementations.
 //
-// Regenerate with: go generate ./internal/monitor  (see dev/diffcheck.py)
+// The vectors name the upstream they came from — golden.json's "source" object
+// carries the commit and the blob hash of monitor_state.py — because evidence
+// that the port matches upstream is worth nothing without saying which
+// upstream. Regenerate with: go generate ./internal/monitor (see
+// dev/diffcheck.py, which fetches that pinned commit itself).
 func TestGoldenAgainstPython(t *testing.T) {
 	raw, err := os.ReadFile("testdata/golden.json")
 	if err != nil {

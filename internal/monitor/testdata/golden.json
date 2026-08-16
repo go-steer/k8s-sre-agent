@@ -1,4 +1,10 @@
 {
+"source": {
+"repo": "https://github.com/langchain-samples/sre-agent",
+"commit": "68d351495ecbea759e554da3939b19197fa028cb",
+"monitor_state_blob": "d69b09e4c464b86f74f5ef592c68f9d4e3fc995d",
+"generated_by": "dev/diffcheck.py"
+},
 "norm": [
 {
 "kind": "Pod",

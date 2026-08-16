@@ -1383,8 +1383,14 @@ go build ./...
 go test ./...
 go vet ./...
 
-# Regenerate the Python-vs-Go fingerprint vectors after touching monitor/
-python3 dev/diffcheck.py && cp dev/golden.json internal/monitor/testdata/
+# Regenerate the Python-vs-Go fingerprint vectors after touching monitor/.
+# Fetches upstream's monitor_state.py into a temp dir at a pinned commit and
+# removes it after; needs network but no checkout, venv or pip install, since
+# that module imports only the standard library. --src DIR reads a checkout you
+# already have. Either way the file is checked against the pinned blob hash, so
+# a moved or edited upstream is refused rather than silently re-baselining the
+# vectors — see the header of dev/diffcheck.py for bumping the pin.
+go generate ./internal/monitor
 
 # Tier-1 evals (needs Vertex credentials)
 source ~/scripts/claude-env.sh
