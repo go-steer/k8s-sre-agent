@@ -12,8 +12,8 @@ import (
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 
-	"github.com/go-steer/core-sre-agent/internal/lookout"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // A specialist must not be offered transfer_to_agent. See buildOne's

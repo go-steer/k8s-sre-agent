@@ -45,8 +45,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-steer/core-sre-agent/internal/lookout"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // Example is one row of the tier-1 dataset, in the upstream wire shape.

@@ -20,8 +20,8 @@ import (
 	"google.golang.org/adk/v2/tool/toolconfirmation"
 	"google.golang.org/genai"
 
-	"github.com/go-steer/core-sre-agent/internal/llm"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/llm"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // The HITL spike.

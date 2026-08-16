@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-steer/core-sre-agent/internal/faults"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/faults"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // LiveEvaluator grades a run against an injected fault rather than against a

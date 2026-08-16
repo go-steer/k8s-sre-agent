@@ -55,15 +55,15 @@ import (
 	adkmodel "google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/go-steer/core-sre-agent/internal/evals"
-	"github.com/go-steer/core-sre-agent/internal/kuberead"
-	"github.com/go-steer/core-sre-agent/internal/llm"
-	"github.com/go-steer/core-sre-agent/internal/lookout"
-	"github.com/go-steer/core-sre-agent/internal/notify"
-	"github.com/go-steer/core-sre-agent/internal/readonly"
-	"github.com/go-steer/core-sre-agent/internal/scheduler"
-	"github.com/go-steer/core-sre-agent/internal/schema"
-	"github.com/go-steer/core-sre-agent/internal/sre"
+	"github.com/go-steer/k8s-sre-agent/internal/evals"
+	"github.com/go-steer/k8s-sre-agent/internal/kuberead"
+	"github.com/go-steer/k8s-sre-agent/internal/llm"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/notify"
+	"github.com/go-steer/k8s-sre-agent/internal/readonly"
+	"github.com/go-steer/k8s-sre-agent/internal/scheduler"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/sre"
 )
 
 func main() {

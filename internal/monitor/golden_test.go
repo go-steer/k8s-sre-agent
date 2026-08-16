@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // TestGoldenAgainstPython is the differential fidelity check: every vector in

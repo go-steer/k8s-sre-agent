@@ -35,7 +35,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-steer/core-sre-agent/internal/scheduler"
+	"github.com/go-steer/k8s-sre-agent/internal/scheduler"
 )
 
 // EnvToken is the environment variable holding the ingress bearer token.

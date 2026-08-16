@@ -25,11 +25,11 @@ import (
 	"github.com/go-steer/mast/pkg/pricing"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/go-steer/core-sre-agent/internal/evals"
-	"github.com/go-steer/core-sre-agent/internal/kuberead"
-	"github.com/go-steer/core-sre-agent/internal/llm"
-	"github.com/go-steer/core-sre-agent/internal/lookout"
-	"github.com/go-steer/core-sre-agent/internal/sre"
+	"github.com/go-steer/k8s-sre-agent/internal/evals"
+	"github.com/go-steer/k8s-sre-agent/internal/kuberead"
+	"github.com/go-steer/k8s-sre-agent/internal/llm"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/sre"
 )
 
 func main() {

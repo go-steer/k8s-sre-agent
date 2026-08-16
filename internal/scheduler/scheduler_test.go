@@ -15,9 +15,9 @@ import (
 
 	adkmodel "google.golang.org/adk/v2/model"
 
-	"github.com/go-steer/core-sre-agent/internal/bounded"
-	"github.com/go-steer/core-sre-agent/internal/lookout"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/bounded"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 var epoch = time.Date(2026, 8, 15, 3, 0, 0, 0, time.UTC)

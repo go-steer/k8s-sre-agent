@@ -1,4 +1,4 @@
-# AGENTS.md — core-sre-agent
+# AGENTS.md — k8s-sre-agent
 
 Instructions for AI coding agents working in this repo, and the design record
 they are drawn from. This is the committed, canonical file; `CLAUDE.md` is

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-steer/core-sre-agent/internal/kindcluster"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/kindcluster"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // EnvLiveCluster gates the tests that build a real kind cluster. Off by

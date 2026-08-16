@@ -23,7 +23,7 @@ import (
 	adkmodel "google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // specFS embeds the shipped specs so a built binary needs no sidecar files.

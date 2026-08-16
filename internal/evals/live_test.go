@@ -5,8 +5,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/go-steer/core-sre-agent/internal/faults"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/faults"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // perfectRun builds the report a flawless agent would return for a fixture.

@@ -12,7 +12,7 @@ import (
 	"google.golang.org/adk/v2/tool/toolutils"
 	"google.golang.org/genai"
 
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // ReportToolName is how the orchestrator delivers its structured HealthReport.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-steer/core-sre-agent/internal/kubectl"
+	"github.com/go-steer/k8s-sre-agent/internal/kubectl"
 )
 
 // Runner executes one kubectl invocation and returns its combined output.

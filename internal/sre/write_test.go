@@ -19,7 +19,7 @@ import (
 
 	"github.com/go-steer/mast/pkg/specialists"
 
-	"github.com/go-steer/core-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
 )
 
 // The write path is a capability the caller grants, not a flag it clears.

@@ -1,4 +1,4 @@
-module github.com/go-steer/core-sre-agent
+module github.com/go-steer/k8s-sre-agent
 
 go 1.26.6
 

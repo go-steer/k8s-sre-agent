@@ -28,8 +28,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/go-steer/core-sre-agent/internal/evals"
-	"github.com/go-steer/core-sre-agent/internal/faults"
+	"github.com/go-steer/k8s-sre-agent/internal/evals"
+	"github.com/go-steer/k8s-sre-agent/internal/faults"
 )
 
 func main() {

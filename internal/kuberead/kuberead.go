@@ -48,7 +48,7 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/go-steer/core-sre-agent/internal/kubectl"
+	"github.com/go-steer/k8s-sre-agent/internal/kubectl"
 )
 
 // ToolsetName is how a specialist spec grants this toolset

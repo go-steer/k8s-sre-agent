@@ -3,7 +3,7 @@ package sre
 import (
 	mastagent "github.com/go-steer/mast/pkg/agent"
 
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // stallReport is the mastagent.StallPayload every Task specialist is built

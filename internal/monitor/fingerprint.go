@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // Kubernetes generates the random part of a pod name from a deliberately

@@ -40,14 +40,14 @@ import (
 	adkmodel "google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/go-steer/core-sre-agent/internal/bounded"
-	"github.com/go-steer/core-sre-agent/internal/evals"
-	"github.com/go-steer/core-sre-agent/internal/faults"
-	"github.com/go-steer/core-sre-agent/internal/kindcluster"
-	"github.com/go-steer/core-sre-agent/internal/kuberead"
-	"github.com/go-steer/core-sre-agent/internal/llm"
-	"github.com/go-steer/core-sre-agent/internal/lookout"
-	"github.com/go-steer/core-sre-agent/internal/sre"
+	"github.com/go-steer/k8s-sre-agent/internal/bounded"
+	"github.com/go-steer/k8s-sre-agent/internal/evals"
+	"github.com/go-steer/k8s-sre-agent/internal/faults"
+	"github.com/go-steer/k8s-sre-agent/internal/kindcluster"
+	"github.com/go-steer/k8s-sre-agent/internal/kuberead"
+	"github.com/go-steer/k8s-sre-agent/internal/llm"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/sre"
 )
 
 func main() {

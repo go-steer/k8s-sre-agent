@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-steer/core-sre-agent/internal/scheduler"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/scheduler"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 var at = time.Date(2026, 8, 15, 17, 12, 38, 0, time.UTC)

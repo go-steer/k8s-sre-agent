@@ -9,7 +9,7 @@ import (
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	"github.com/go-steer/core-sre-agent/internal/sre"
+	"github.com/go-steer/k8s-sre-agent/internal/sre"
 )
 
 // stallSummary is the summary the stall guard writes. Only the marker is

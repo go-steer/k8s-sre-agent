@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-steer/core-sre-agent/internal/faults"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/faults"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // report wraps findings in the minimum valid envelope, so a test can say what

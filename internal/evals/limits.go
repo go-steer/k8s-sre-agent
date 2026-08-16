@@ -6,7 +6,7 @@ import (
 	"github.com/go-steer/mast/pkg/budget"
 	"github.com/go-steer/mast/pkg/pricing"
 
-	"github.com/go-steer/core-sre-agent/internal/llm"
+	"github.com/go-steer/k8s-sre-agent/internal/llm"
 )
 
 // Limits builds one run's ceilings, priced through cat. A zero maxCostUSD or

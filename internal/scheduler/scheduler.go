@@ -65,9 +65,9 @@ import (
 
 	adkmodel "google.golang.org/adk/v2/model"
 
-	"github.com/go-steer/core-sre-agent/internal/bounded"
-	"github.com/go-steer/core-sre-agent/internal/lookout"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/bounded"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // Transition is one subject's change since the previous cycle, as

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-steer/core-sre-agent/internal/scheduler"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/scheduler"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // Render turns a digest into the message an operator reads.

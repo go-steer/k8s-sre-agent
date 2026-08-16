@@ -19,7 +19,7 @@ import (
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/mcptoolset"
 
-	"github.com/go-steer/core-sre-agent/internal/kubectl"
+	"github.com/go-steer/k8s-sre-agent/internal/kubectl"
 )
 
 // ToolsetName is how specialist specs refer to this toolset in their MCP
@@ -153,7 +153,7 @@ func Surface(ctx context.Context, cfg Config) ([]ToolInfo, error) {
 		return nil, err
 	}
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "core-sre-agent", Version: "1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "k8s-sre-agent", Version: "1"}, nil)
 	sess, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("lookout: connect for tool list: %w", err)

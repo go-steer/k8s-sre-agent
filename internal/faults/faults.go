@@ -31,8 +31,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-steer/core-sre-agent/internal/kindcluster"
-	"github.com/go-steer/core-sre-agent/internal/schema"
+	"github.com/go-steer/k8s-sre-agent/internal/kindcluster"
+	"github.com/go-steer/k8s-sre-agent/internal/schema"
 )
 
 // BaseImage is the workload image every fixture uses.

@@ -16,8 +16,8 @@ import (
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 
-	"github.com/go-steer/core-sre-agent/internal/kuberead"
-	"github.com/go-steer/core-sre-agent/internal/lookout"
+	"github.com/go-steer/k8s-sre-agent/internal/kuberead"
+	"github.com/go-steer/k8s-sre-agent/internal/lookout"
 )
 
 // expectedSpecs is the specialist roster. Listed here rather than derived from
