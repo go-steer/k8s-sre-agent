@@ -1,0 +1,17 @@
+# Personal session context, not project rules. AGENTS.md is the committed,
+# canonical file; CLAUDE.md holds credentials paths, working preferences and
+# whatever is open this week, which is nobody else's business and stale within
+# a fortnight. Same split as k8s-lookout.
+CLAUDE.md
+.claude/
+
+# Built binaries. Every command here is `go run`, and the eval harnesses write
+# their output under /tmp by default — so anything executable at the repo root
+# is an absent-minded `go build` with no -o, and one of them is 40 MB.
+/sre-agent
+/sre-eval
+/sre-eval-live
+/sre-monitor
+
+# Session scratch.
+/resume

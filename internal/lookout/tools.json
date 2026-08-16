@@ -1,0 +1,1302 @@
+[
+ {
+  "name": "k8s_admission_webhooks",
+  "description": "When creates/updates hang or fail cluster-wide with \"failed calling webhook\", or before relying on a policy engine: audit every admission webhook — dead backends × failurePolicy (Fail + dead backend rejects every matching admission), the namespace/rule blast radius, timeout stall risk, CA-bundle expiry. The full check; health's webhooks category delegates here.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): webhook — admission webhook as \u003cconfiguration\u003e/\u003cwebhook name\u003e; service — service backend the webhook points at, as \u003cnamespace\u003e/\u003cname\u003e; backend — why the backend is dead: service missing, no ready endpoints, or port \u003cp\u003e not on service; gates — namespaces the webhook gates, from namespaceSelector: all namespaces, or \u003cmatched\u003e/\u003ctotal\u003e namespaces with up to 5 names; rules — compact operations/resources summary of the webhook's rules, e.g. \"CREATE,UPDATE pods,deployments.apps\"; object_selector — the webhook's objectSelector, when one is set; timeout — webhook timeoutSeconds as \u003cn\u003es (nil defaults to the API's 10s); subject — CA-bundle certificate subject (CN when set); never key material; not_after — CA-bundle certificate NotAfter, RFC 3339; days_left — whole days until NotAfter (negative = expired).",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "cert_warn": {
+     "default": "720h",
+     "description": "report webhook CA bundles expiring within this window (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_blast_radius",
+  "description": "Blast radius of one pod/workload — who is upstream (routes/owns/governs it), lateral (same node, shared config/volume), downstream (it depends on); --at answers it as of incident onset from a sentinel store.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): direction — neighbor's direction from the target: upstream (routes/owns/governs it), lateral (shares a node/volume/config), downstream (the target points at it); relation — how the neighbor attaches: the edge kind (RoutesTo, Owns, Selects, Governs, RunsOn, Mounts) for upstream/downstream, shared-node|shared-zone|shared-config|shared-secret|shared-pvc for lateral; hop — BFS depth from the target at which the neighbor was first reached (1 = direct edge); shared — on lateral neighbors: the shared object as \u003cKind\u003e/\u003cname\u003e; ready — pod readiness (live mode only — history stores topology, not status); source — summary-line note: live (one-shot List pass) or history (reconstructed from --store); at — summary-line note: the resolved --at instant the history answer is as of, RFC 3339.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "at": {
+     "description": "answer as of this instant instead of live: RFC3339 (2026-07-25T10:00:00Z) or a duration ago (20m). Requires --store.",
+     "type": "string"
+    },
+    "depth": {
+     "default": 3,
+     "description": "graph edges followed per direction from the target's pods",
+     "type": "integer"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "store": {
+     "description": "path to a sentinel's SQLite store (its --store file); source for --at point-in-time topology",
+     "type": "string"
+    },
+    "target": {
+     "description": "\u003cKind\u003e/[\u003cnamespace\u003e/]\u003cname\u003e — the pod or workload at the center of the question: \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, \u003cKind\u003e/\u003cname\u003e (namespace from --namespace, else \"default\"), or a bare pod name; kinds are case-insensitive with the usual short forms (po, deploy, rs, sts, ds, cj). --workload=\u003cKind\u003e/\u003cns\u003e/\u003cname\u003e is the flag-shaped alternative.",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_cloud_ipspace",
+  "description": "Pod/Service/node CIDR utilization per subnet, judged: warning at 80%, critical at 95% — IP space is incompressible, an exhausted range fails the next node or pod block outright. Consumption rate/ETA lives in the sentinel's capacity source.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): cidr — the range's CIDR block; purpose — what the range allocates: pods, services, or nodes; used — allocated addresses (for GKE pod ranges: addresses of the per-node blocks already carved out — the granularity at which the range actually exhausts); capacity — usable addresses in the range; pct — used as a percent of capacity, one decimal; capability — cloud.unavailable: the provider capability this command needed (ipspace); provider — cloud.unavailable: the provider that was asked; unavailable — summary-line note (§2 marker): why the cloud read could not be served.",
+  "inputSchema": {
+   "properties": {
+    "all": {
+     "description": "exploratory dump: emit every range regardless of utilization (info severity below 80%), sorted by pct descending",
+     "type": "boolean"
+    },
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_cloud_orphans",
+  "description": "Billing-active cloud leftovers: unattached GCE disks older than --min-age and forwarding rules/LBs routing to zero endpoints — cost and hygiene sweep, not an incident read.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): zone — orphan.disk: the disk's zone; size_gb — orphan.disk: provisioned size in GB (billed whether used or not); disk_type — orphan.disk: disk type short name (pd-ssd bills ~4x pd-standard idle); unused_since — orphan.disk: last detach (or creation, if never attached), RFC3339; omitted when the provider cannot date it; unused_for — orphan.disk: how long the disk has been unattached; \"unknown\" when undatable; region — orphan.lb: the forwarding rule's region (\"global\" for global rules); why — orphan.lb: the provider's orphan judgment (e.g. which backend resolved empty); capability — cloud.unavailable: the provider capability this command needed (orphans); provider — cloud.unavailable: the provider that was asked; unavailable — summary-line note (§2 marker): why the cloud read could not be served.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "min_age": {
+     "default": "24h0m0s",
+     "description": "report a disk only when unattached at least this long (age from last detach, else creation); disks with no datable age are always reported (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "only": {
+     "default": "disks,lbs",
+     "description": "resource classes to sweep, comma-separated: disks, lbs",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_cloud_quota",
+  "description": "Per-project cloud quota usage vs limit, ranked nearest-to-exhaustion: findings from --quota-warn (default 80%), critical at 95% — quota is incompressible (scale-ups fail at the limit) and increases need lead time. Trend/ETA lives in the quota source.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): scope — the quota's scope: a region name, or \"global\"; usage — current usage in the quota's own unit; limit — the quota limit; unit — the quota's unit, when the provider names one; pct — usage as a percent of the limit, one decimal; capability — cloud.unavailable: the provider capability this command needed (quota); provider — cloud.unavailable: the provider that was asked; unavailable — summary-line note (§2 marker): why the cloud read could not be served.",
+  "inputSchema": {
+   "properties": {
+    "all": {
+     "description": "exploratory dump: emit every ratable quota regardless of --quota-warn (info severity below it), sorted by pct descending",
+     "type": "boolean"
+    },
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "quota_warn": {
+     "default": 80,
+     "description": "report a quota only at or above this percent of its limit (critical is fixed at 95%)",
+     "type": "integer"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_cloud_stockout",
+  "description": "GCE capacity stockouts (ZONE_RESOURCE_POOL_EXHAUSTED) per zone/machine-type over --since (default 24h), with event-derived reroute candidates — the cloud-side why behind pods stuck Pending on failed scale-ups.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): machine_type — the exhausted machine type (omitted when the log record does not name one); events — stockout events for this zone/machine-type pair in the window; first_seen — earliest event in the window (RFC3339); last_seen — latest event in the window (RFC3339); reroute — same-region zones active in the window with no stockout for this machine type, comma-separated; omitted when the window offers no clean candidate; window — summary-line note: the lookback the events cover; capability — cloud.unavailable: the provider capability this command needed (stockout); provider — cloud.unavailable: the provider that was asked; unavailable — summary-line note (§2 marker): why the cloud read could not be served.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_cluster_health",
+  "description": "\"Any issues with this cluster?\" in one call: a ten-category scorecard (control-plane, nodes, crash loops, pending, rollouts, storage, add-ons, quotas, certs, webhooks) — every category answers healthy|degraded|unavailable, degraded ones with details. With --store, findings merge the sentinel's open triage-status records (§9.4): a scan mid-incident reports the diagnosis and the agent's severity judgment, not a fresh unknown.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): category — scorecard category the finding belongs to (on health.category: which category this line scores); status — category status: healthy|degraded|unavailable (the scorecard always answers — healthy is explicit); total — findings in a degraded category; top — worst findings of a degraded category inline, as kind[ namespace/name]; capped by --top; subject — TLS certificate subject (CN when set); never key material; not_after — TLS certificate NotAfter, RFC 3339; days_left — whole days until NotAfter (negative = expired); phase — PersistentVolumeClaim phase on storage findings (Pending or Lost); webhook — admission webhook as \u003cconfiguration\u003e/\u003cwebhook name\u003e; service — service backend a webhook points at, as \u003cnamespace\u003e/\u003cname\u003e; backend — why a webhook backend is dead: service missing, no ready endpoints, or port \u003cp\u003e not on service; gates — namespaces a webhook gates, from namespaceSelector: all namespaces, or \u003cmatched\u003e/\u003ctotal\u003e namespaces with up to 5 names; rules — compact operations/resources summary of a webhook's rules, e.g. \"CREATE,UPDATE pods,deployments.apps\"; object_selector — a webhook's objectSelector, when one is set; timeout — webhook timeoutSeconds as \u003cn\u003es (nil defaults to the API's 10s); triage_status — triage state from the matched §9.4 record (investigating|triaged|actioned|escalated) — present only with --store on merged findings; triage_root_cause — the incident agent's root-cause hypothesis, from the matched triage-status record; triage_action — the incident agent's paper trail (PRs opened, escalations), from the matched triage-status record; triage_session — incident session that wrote the matched triage-status record; triage_age — how long ago the matched triage-status record was last updated; container — container the finding is about (init containers prefixed init:); image — image reference that failed to pull; restarts — container restart count; exit_code — exit code of the container's last termination; last_state — reason of the container's last termination (e.g. OOMKilled); age — how long the abnormal state has persisted; desired — desired replica/scheduled count from spec; ready — ready count from status; updated — updated-to-current-revision count from status; available — available count from status; failed — failed pod count of a Job; condition — node condition type that is abnormal; taint — taint key indicating reclaim/drain; pods — pods affected (behind a cordoned node or a PDB); healthy — currently healthy pods behind a PDB; required — pods the PDB requires healthy; addon — system add-on role: dns, proxy, cni, csi, metrics, connectivity; resource — ResourceQuota resource name at or near its limit; used — quota usage from status; hard — quota hard limit from status; pct — quota usage as percent of the hard limit; pack — the pack this finding belongs to; also the summary-line note naming the pack that ran; metric — the backend-neutral metric the query measured (pack_unavailable: the absent metric); verb — apiserver request verb for this series (apiserver pack); observed — the worst (maximum) aligned value in the window, in the query's unit — the breach basis; latest — the newest aligned value in the window; threshold — the crossed threshold: the critical one when severity=critical, else the warning one; window — the lookback the series cover (--since, or the pack default); also a summary-line note.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "cert_warn": {
+     "default": "720h",
+     "description": "report TLS certificates expiring within this window (certs category) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "store": {
+     "description": "path to a sentinel's SQLite store (its --store file); merges open §9.4 triage-status records so findings carry triage_* fields and severity reflects the agent's override",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "top": {
+     "default": 3,
+     "description": "how many findings to name inline on a degraded category's scorecard line",
+     "type": "integer"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_drain_blockers",
+  "description": "Before draining a node, list everything that will block the drain (PDBs at disruptionsAllowed=0) or be destroyed by it (bare pods, emptyDir data, single-replica workloads); --node details one node, -A means all nodes here (pods are always examined across all namespaces); scanned counts pods examined after the standard-drain skips (mirror/DaemonSet/completed pods).\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): node — the node the blocker sits on (stamped on every --node-mode finding); pods — pods on the node covered by the gridlocked PDB; pod_names — names of the covered pods, capped at 8 with a +N more tail; disruptions_allowed — PDB status.disruptionsAllowed (always 0 in a gridlock finding); current_healthy — PDB status.currentHealthy; desired_healthy — PDB status.desiredHealthy; volumes — emptyDir volume names on the pod; memory-backed ones marked (medium=Memory); workload — the single-replica controller as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e; replicas — the controller's spec.replicas (always 1 in a singleton finding); blockers — total drain blockers on the node (also a --node-mode summary note); pdb_gridlock — gridlocked-PDB blocker count on the node (-A per-node finding; zero counts omitted); bare_pods — bare-pod blocker count on the node (-A per-node finding; zero counts omitted); local_storage — emptyDir blocker count on the node (-A per-node finding; zero counts omitted); singletons — single-replica blocker count on the node (-A per-node finding; zero counts omitted); drainable — summary note (--node mode): yes when the node has no blockers, else no; nodes — summary note (-A mode): nodes examined; blocked — summary note (-A mode): nodes with at least one blocker.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "node": {
+     "description": "analyze one node in detail: every blocker on it becomes its own finding. Exactly one of --node or -A (all-nodes summary) is required.",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_event_timeline",
+  "description": "Deduped chronological event timeline: kubectl get events, but collapsed by (object, reason family) over a workload's whole owner-reference tree, with HPA rescale-oscillation (thrash) detection.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): count — events collapsed into this timeline entry: k8s per-event repeat counts summed across the entry's reason family; first_seen — RFC3339 timestamp of the entry's oldest activity; last_seen — RFC3339 timestamp of the entry's newest activity (the timeline sort key); source — reporting component (kubelet, horizontal-pod-autoscaler, …); variants — raw Event.Reason values collapsed into this entry, comma-separated (present only when a reason family merged more than one); replicas — event.hpa_thrash: the chronological replica sequence recovered from SuccessfulRescale events, e.g. 2-\u003e6-\u003e2-\u003e6; flips — event.hpa_thrash: most scale-direction changes observed inside one --hpa-window; window — event.hpa_thrash: the --hpa-window the flips were counted in; target — event.hpa_thrash: the HPA's scaleTargetRef as Kind/name (when the HPA object was readable).",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "hpa_flips": {
+     "default": 2,
+     "description": "scale-direction changes within --hpa-window that count as thrash (2 = up→down→up)",
+     "type": "integer"
+    },
+    "hpa_window": {
+     "default": "30m",
+     "description": "report event.hpa_thrash when enough scale-direction changes fall inside a window this long (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_findings_ack",
+  "description": "Suppress one finding for a window after an operator has taken it — later diffs report it `suppressed` instead of re-raising it, and it comes back on its own when the window expires; the \"I'm on this, stop paging me until lunch\" surface.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): subject_key — the acked subject's key, as stored; ack_until — when the window expires, RFC 3339; absent after --clear; ack_by — who took the ack, as given by --by; first_seen — when the acked subject was first observed, RFC 3339 — the \"broken since\" timestamp, so an operator can see what they are taking; last_seen — when the acked subject was last observed, RFC 3339.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "by": {
+     "description": "who took the ack, recorded verbatim on the row and echoed in later `suppressed` records. Lookout does not authenticate this: the caller (mast) owns identity and the audit trail, lookout owns the state",
+     "type": "string"
+    },
+    "clear": {
+     "description": "end the ack window now instead of opening one; the subject goes back to being classified normally on the next diff",
+     "type": "boolean"
+    },
+    "for": {
+     "default": "4h0m0s",
+     "description": "how long to suppress the subject. The window is absolute from now and always expires; to end one early use --clear (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "store": {
+     "description": "path to the sentinel's SQLite store (its --store file). Required: finding state lives in the sentinel's --store SQLite file (§9.1); a diff with nowhere to persist would report everything new on every run",
+     "type": "string"
+    },
+    "target": {
+     "description": "\u003csubject-key\u003e — the subject key from a `findings diff` record's subject_key field: \u003ccluster\u003e/\u003cnamespace\u003e/\u003ckind_of_object\u003e/\u003cnormalized-name\u003e/\u003ccanonical-reason\u003e. Must name a currently-open subject — a resolved subject has no row to ack",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": false
+  }
+ },
+ {
+  "name": "k8s_findings_diff",
+  "description": "Diff a health report against the previous run and report what CHANGED — new, ongoing, escalated, resolved, suppressed — instead of re-listing every open finding; the command that makes a scheduled scan produce a digest an operator will keep reading.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): transition — how this subject changed since the previous run: new|ongoing|escalated|resolved|suppressed; subject_key — the normalized instance-grain key this diff tracks: \u003ccluster\u003e/\u003cnamespace\u003e/\u003ckind_of_object\u003e/\u003cnormalized-name\u003e/\u003ccanonical-reason\u003e. Distinct from the envelope's class-level fingerprint (§8); pass it to `lookout findings ack`; prev_severity — the severity recorded at the previous run; absent on `new`. Compare with the envelope's severity to see a de-escalation, which stays classified `ongoing`; first_seen — when this subject was first observed, RFC 3339 — carried across runs, so it is the \"broken since\" timestamp, not this run's clock; last_seen — when this subject was last observed, RFC 3339; ack_until — expiry of the operator ack window on a `suppressed` subject, RFC 3339; ack_by — who took the ack, as forwarded by the caller.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "cluster": {
+     "description": "cluster label to bind these findings to; becomes the first segment of every subject key. Give the same value on every run for a cluster — changing it makes every subject look new",
+     "type": "string"
+    },
+    "dry_run": {
+     "description": "classify and print, but do not advance the stored state. Use to preview a report without consuming it — a normal run is not repeatable, because after it the second run's findings are all `ongoing`",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "report": {
+     "default": "-",
+     "description": "the §4.2 finding report to classify: `-` reads stdin (the usual `lookout health | lookout findings diff --report -`), or a file path. Either wire format is accepted, detected per line, so the upstream command does not need --format=json",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "store": {
+     "description": "path to the sentinel's SQLite store (its --store file), where the previous run's state lives. Required: finding state lives in the sentinel's --store SQLite file (§9.1); a diff with nowhere to persist would report everything new on every run",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "transitions": {
+     "description": "emit only these transition classes, comma-separated: new|ongoing|escalated|resolved|suppressed (empty = all). `--transitions=new,escalated,resolved` is the digest view: everything that changed, nothing that didn't",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": false
+  }
+ },
+ {
+  "name": "k8s_gitops_drift",
+  "description": "Find spec fields of Deployments/StatefulSets/DaemonSets owned by a manager other than the GitOps controller (managedFields) — out-of-band kubectl edits and rogue co-managers. Reports manager strings (tool names, not people); --identity additionally resolves each drift write to the audited principal via the cloud provider's audit trail (GKE Cloud Audit Logs), reporting an explicit unavailable on clusters without one. Default scope: all namespaces; scanned counts workload objects examined.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): manager — on findings: the foreign manager string from managedFields (a tool name like kubectl-edit — never a user identity; see --identity); on the summary line: the resolved GitOps manager; detection — summary note: how the GitOps manager was resolved — declared (--manager), majority (auto-detected), or none (scope owns no spec fields); operation — managedFields operation of the foreign manager's last write: Apply or Update; tool — client tool recognized from the manager string (kubectl for kubectl-edit/kubectl-patch/kubectl-*); fields — compact spec paths the foreign manager owns (e.g. spec.template.spec.containers[app].image), capped at 8 with a +N more tail; field_count — total spec leaf fields the foreign manager owns on this object (uncapped); age — how long ago the foreign manager last wrote (managedFields time); omitted when the API server recorded no time; principal — --identity: the audited principal of the write nearest the drift time (GKE: principalEmail), or the explicit sentinel none-in-audit-window / no-write-time-anchor when the trail cannot answer; principal_agent — --identity: the caller-supplied client string of that write (a kubectl or controller user-agent), when the trail records one; caller-controlled text, display-only; other_principals — --identity: other distinct principals that wrote the object inside the audit window, capped at 8 with a +N more tail; identity — summary note when --identity could not be served: the §2 unavailable marker naming why (no provider / audit capability absent).",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "identity": {
+     "description": "resolve each finding's last drift write to the audited principal (who ran it) via the cloud provider's audit trail; requires a provider with the audit capability (GKE: Cloud Audit Logs admin-activity read), otherwise the summary line reports an explicit unavailable",
+     "type": "boolean"
+    },
+    "manager": {
+     "description": "the declared GitOps manager (e.g. argocd-controller); empty auto-detects it as the manager owning the most spec leaf fields summed across the scanned objects, ties broken to the lexicographically smallest",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_net_probe",
+  "description": "Actively confirm a network hypothesis — resolve DNS names, open TCP connections, GET HTTP(S) URLs — from wherever lookout runs (in a pod = the in-cluster view); zero cluster mutation, no pods spawned.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): ips — probe.dns: resolved addresses, sorted, comma-separated; latency — how long the probe took: DNS resolution / TCP connect / full HTTP exchange; status — probe.http: HTTP status code of the (unfollowed) response; content_length — probe.http: Content-Length the server declared (body is discarded unread; omitted when unknown); error_class — failed probes: nxdomain|timeout|refused|unreachable|reset|cert|http_4xx|http_5xx|error.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "dns": {
+     "description": "comma-separated names to resolve (e.g. api.prod.svc.cluster.local,db.example.com)",
+     "type": "string"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "http": {
+     "description": "comma-separated http(s) URLs to GET; redirects are reported (3xx), not followed, and response bodies are never read into findings",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "probe_timeout": {
+     "default": "5s",
+     "description": "per-probe timeout; raise --timeout too when probing many slow targets (it caps the whole invocation) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "tcp": {
+     "description": "comma-separated host:port endpoints to connect to (e.g. api.prod.svc:8080,10.0.0.5:5432)",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_perf_probe",
+  "description": "Control-plane and startup performance via metrics query packs: --pack=apiserver (p99 latency by verb/resource), apf (queue saturation + 429 rejects), etcd (WAL fsync p99 + DB size), startup (pod-first-ready p95 trend); apf/etcd need GKE control-plane metrics enabled — absence degrades to an explicit pack_unavailable finding.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): pack — the pack this finding belongs to; also the summary-line note naming the pack that ran; metric — the backend-neutral metric the query measured (pack_unavailable: the absent metric); verb — apiserver request verb for this series (apiserver pack); resource — apiserver request resource for this series (apiserver pack); priority_level — APF priority level for this series (apf pack); code — the HTTP status code the query matched (apf pack: 429); observed — the worst (maximum) aligned value in the window, in the query's unit — the breach basis; latest — the newest aligned value in the window; threshold — the crossed threshold: the critical one when severity=critical, else the warning one; window — the lookback the series cover (--since, or the pack default); also a summary-line note; trend — startup pack: second-half vs first-half mean delta of the window, e.g. \"+34%\" — the p95 trend direction; capability — cloud.unavailable: the provider capability this command needed (metrics); provider — cloud.unavailable: the provider that was asked; unavailable — summary-line note (§2 marker): why the metrics backend could not be served.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "pack": {
+     "description": "which query pack to run (required): apiserver|apf|etcd|startup",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_recent_changes",
+  "description": "What changed around one workload in the window before onset — rollouts, config/secret updates, rescales, node ops — chronological, scoped to the target's graph neighborhood; full fidelity from a sentinel store, best-effort live otherwise.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): at — when the change happened, RFC 3339 (also the summary-line note for the resolved --at instant); relation — the changed object's place in the target's neighborhood: self (the target or its pods), upstream, lateral, downstream; fields — changed fields as path=from→to pairs — names, counts, and shortened hashes only, never values (§6.5); origin — where the change was seen: log (§6.6 delta log), event (Kubernetes Event), api (reconstructed from current API state); revision — deployment.kubernetes.io/revision of a rollout's ReplicaSet (live approximation); image — first container image of a rollout's new pod template (live approximation); window — summary-line note: the (from, to] window the answer covers, RFC 3339; source — summary-line note: history (delta log from --store) or live-approximation (no store; see the fidelity gap in --help).",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "at": {
+     "description": "answer as of this instant instead of live: RFC3339 (2026-07-25T10:00:00Z) or a duration ago (20m). Requires --store.",
+     "type": "string"
+    },
+    "depth": {
+     "default": 2,
+     "description": "neighborhood radius: graph edges followed per direction to decide which objects' changes are in scope",
+     "type": "integer"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "store": {
+     "description": "path to a sentinel's SQLite store (its --store file); source for --at point-in-time topology",
+     "type": "string"
+    },
+    "target": {
+     "description": "\u003cKind\u003e/[\u003cnamespace\u003e/]\u003cname\u003e — the pod or workload at the center of the question: \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, \u003cKind\u003e/\u003cname\u003e (namespace from --namespace, else \"default\"), or a bare pod name; kinds are case-insensitive with the usual short forms (po, deploy, rs, sts, ds, cj). --workload=\u003cKind\u003e/\u003cns\u003e/\u003cname\u003e is the flag-shaped alternative.",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_resource_spec",
+  "description": "Read ONE resource's spec: kubectl describe, but token-dense, secret-safe, and default-elided — healthy conditions are omitted.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): labels — resource labels as sorted k=v pairs; owner — controlling owner as Kind/name; phase — status.phase, only when abnormal for the kind (zero nominal state); node — node the pod is scheduled on; service_account — pod's service account; volumes — pod volumes as name:source (source names its referent, never its payload); container — container name (one spec.container finding per container); init — \"true\" when the container is an init container; image — container image reference; requests — resource requests as sorted k=v pairs; limits — resource limits as sorted k=v pairs; ports — container or service ports, compact ([name:]port[-\u003etarget][/proto]); liveness — liveness probe one-liner (kind, target, non-default timings); readiness — readiness probe one-liner; env — env vars; literal credential values are [REDACTED], valueFrom entries render as named references; env_from — envFrom sources as kind:name; replicas — desired replica count; strategy — rollout strategy summary (type + non-default knobs); selector — workload/service selector as sorted k=v pairs; type — Service or Secret type, only when non-default; external_name — ExternalName service target; session_affinity — service session affinity, only when not None; keys — ConfigMap/Secret data KEYS with byte sizes — values are never rendered; condition — abnormal status condition as Type=Status; since — the condition's lastTransitionTime; spec — kinds without a dedicated renderer: sanitized spec flattened to path=value pairs.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "diff": {
+     "description": "diff against the previous graph-history revision — requires a sentinel store; not yet implemented (§6.6)",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "target": {
+     "description": "\u003cKind\u003e/[\u003cnamespace\u003e/]\u003cname\u003e — the resource to read; Kind is case-insensitive, accepts the aliases po=Pod, deploy=Deployment, rs=ReplicaSet, sts=StatefulSet, ds=DaemonSet, svc=Service, cm=ConfigMap, pvc=PersistentVolumeClaim, ing=Ingress, netpol=NetworkPolicy, no=Node, and unlisted kinds (CRDs) resolve via API discovery (qualify as \u003cKind\u003e.\u003cgroup\u003e if ambiguous). Omit \u003cnamespace\u003e for cluster-scoped kinds, or to use --namespace (falling back to \"default\"). --workload=\u003cKind\u003e/\u003cns\u003e/\u003cname\u003e is the flag-shaped alternative.",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_resource_top",
+  "description": "Point-in-time CPU/memory saturation vs limits: kubectl top, but judged — usage-vs-limit percent per container with the OOM asymmetry built in (memory ≥95% of limit is critical, CPU caps at warning: it throttles, it does not kill); -A adds node usage vs allocatable. Trends/ETAs live in the sentinel's saturation source; --history adds window stats via the cloud provider.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): resource — the judged dimension: cpu or memory; usage — current usage in the dimension's natural unit (millicores for cpu, IEC bytes for memory); limit — the container's configured limit (top.saturation), same unit as usage; allocatable — the node's allocatable capacity (top.node), same unit as usage; pct — usage as a percent of the limit/allocatable, one decimal; container — container name within the pod; node — node the pod runs on (top.saturation; top.node carries the node as name); pods — top.unlimited: pods in scope with at least one container missing a cpu or memory limit; containers — top.unlimited: containers in scope missing a cpu or memory limit; missing — top.unlimited_container: which limit dimensions are absent (cpu, memory, or both); max_pct — --history: highest usage-vs-limit percent observed in the window; avg_pct — --history: mean usage-vs-limit percent over the window; p95_pct — --history: 95th-percentile usage-vs-limit percent over the window; capability — cloud.unavailable: the provider capability --history needed (metrics); provider — cloud.unavailable: the provider that was asked; history — summary-line note: the --history window the stats cover; unavailable — summary-line note (§2 marker): why --history could not be served.",
+  "inputSchema": {
+   "properties": {
+    "all": {
+     "description": "exploratory dump: emit every sampled row regardless of --top-warn (info severity below it), sorted by pct descending; containers capped at --limit",
+     "type": "boolean"
+    },
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "history": {
+     "description": "enrich container findings with max/avg/p95 usage-vs-limit over this window via the cloud provider metrics backend; no provider → explicit unavailable finding + summary marker, point-in-time output unaffected (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "limit": {
+     "default": 50,
+     "description": "row cap for the --all container dump",
+     "type": "integer"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "show_unlimited": {
+     "description": "list each container missing a cpu or memory limit individually (default: one aggregate count)",
+     "type": "boolean"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "top_warn": {
+     "default": 80,
+     "description": "report a container/node only at or above this percent of its limit/allocatable (zero nominal state; memory additionally turns critical at 95%)",
+     "type": "integer"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_state_edges",
+  "description": "Verify every dependency edge of one workload — ConfigMap/Secret keys, Service selectors and endpoints, Ingress backends, ServiceAccount/RBAC references, TLS expiry — reporting only the broken ones.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): workload — the targeted workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, stamped on every finding; pods — how many of the workload's pods carry the broken reference; container — container declaring the broken env/envFrom reference; env — environment variable whose valueFrom reference is broken; volume — pod volume whose ConfigMap/Secret reference is broken; key — the referenced key that is missing from the ConfigMap/Secret; selector — the Service label selector under scrutiny; selected — pods the Service selector currently selects; ready — ready count (selected pods or serving endpoints, per finding kind); endpoints — total endpoints across the Service's EndpointSlices; slices — how many EndpointSlices back the Service; service — the Service a slice or Ingress backend refers to; pod — pod named by an orphaned endpoint targetRef; subject — TLS certificate subject (CN when set); never key material; not_after — TLS certificate NotAfter, RFC 3339; days_left — whole days until NotAfter (negative = expired); via — how a TLS secret is reachable from the workload: mount or ingress; ingress — Ingress referencing the TLS secret; host — Ingress rule host of the broken backend (empty for the default backend); path — Ingress rule path of the broken backend; port — Service port (name or number) the Ingress backend asks for; service_account — ServiceAccount the RBAC finding is about; role_ref — dangling roleRef as \u003cKind\u003e/\u003cname\u003e.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "cert_warn": {
+     "default": "720h",
+     "description": "report TLS certificates expiring within this window (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_triage_delta",
+  "description": "Every abnormal object in one scan — the first call for \"anything wrong in this cluster?\": broken/pending pods, stalled rollouts, node pressure/NPD/preemption, gridlocked PDBs, degraded kube-system add-ons, quotas at their limits.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): container — container the finding is about (init containers prefixed init:); image — image reference that failed to pull; restarts — container restart count; exit_code — exit code of the container's last termination; last_state — reason of the container's last termination (e.g. OOMKilled); age — how long the abnormal state has persisted; desired — desired replica/scheduled count from spec; ready — ready count from status; updated — updated-to-current-revision count from status; available — available count from status; failed — failed pod count of a Job; condition — node condition type that is abnormal; taint — taint key indicating reclaim/drain; pods — pods affected (behind a cordoned node or a PDB); healthy — currently healthy pods behind a PDB; required — pods the PDB requires healthy; addon — system add-on role: dns, proxy, cni, csi, metrics, connectivity; resource — ResourceQuota resource name at or near its limit; used — quota usage from status; hard — quota hard limit from status; pct — quota usage as percent of the hard limit.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "only": {
+     "default": "pods,nodes,pdb,system,quota",
+     "description": "comma-separated finding classes to scan: any subset of pods,nodes,pdb,system,quota",
+     "type": "string"
+    },
+    "pending_age": {
+     "default": "5m",
+     "description": "flag Pending pods older than this; also the grace before a not-ready container in a Running pod is flagged (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "quota_warn": {
+     "default": 90,
+     "description": "warn when a ResourceQuota resource reaches this percent of its hard limit (the hard limit itself is always critical)",
+     "type": "integer"
+    },
+    "restarts": {
+     "default": 5,
+     "description": "flag containers restarted at least this many times",
+     "type": "integer"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_triage_logs",
+  "description": "kubectl logs, distilled: Drain-clusters raw lines into templates with counts (probe noise stripped, stack traces collapsed to top frames) — reach for this instead of reading logs whole.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): template — log template; \u003c*\u003e marks positions that varied across merged lines; count — lines merged into this cluster (on log.probe_noise: probe lines stripped); pods — distinct pods that emitted this template (present when \u003e1); level — guessed log level (fatal|error|warn|info|debug) from token/field match; first_seen — RFC3339 timestamp of the oldest merged line (from log timestamps when parseable); last_seen — RFC3339 timestamp of the newest merged line; lang — stack-trace runtime on log.stacktrace findings: go|java|python; frames — top stack frames on log.stacktrace findings, innermost first, ' \u003c ' separated; sample — one representative raw line, truncated and sanitized; container — container the finding refers to (log.fetch_error only); omitted_templates — clusters dropped by --max-templates (log.overflow only); omitted_lines — lines inside the dropped clusters (log.overflow only).",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "container": {
+     "description": "restrict to one container (default: all init + regular + ephemeral containers)",
+     "type": "string"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "keep_probes": {
+     "description": "keep health/readiness probe request lines instead of stripping them",
+     "type": "boolean"
+    },
+    "max_templates": {
+     "default": 40,
+     "description": "cap emitted template clusters; the low-count tail is summarized in one log.overflow finding",
+     "type": "integer"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "pod": {
+     "description": "read one pod by name (requires --namespace)",
+     "type": "string"
+    },
+    "previous": {
+     "description": "read the previous container instance (what a crashed container said before it died)",
+     "type": "boolean"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "tail": {
+     "default": 5000,
+     "description": "max lines fetched per container stream (0 = no limit)",
+     "type": "integer"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_triage_status",
+  "description": "Write (or read back) the §9.4 triage-status record for an incident — diagnosis, action taken, and your severity judgment — so health scans stop reporting it as a fresh unknown and the sentinel stops re-paging followups; the incident playbooks' closing move.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): resource_key — the record's resource pin, as stored (\u003cKindOfObject\u003e/\u003cnamespace\u003e/\u003cname\u003e); triage_status — the record's triage state (investigating|triaged|actioned|escalated|resolved); triage_root_cause — the recorded root-cause hypothesis; triage_action — the recorded action / paper trail; triage_session — the incident session that wrote the record; severity_override — the recorded severity judgment (critical|warning|info), when one is set; updated — when the record last changed, RFC 3339.",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "description": "action taken / paper trail (\"fix PR opened; config rollout pending\")",
+     "type": "string"
+    },
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "fingerprint": {
+     "description": "the incident-class fingerprint from the inject payload or store row (§8, sha256:…). Required to write; to read, this or --resource selects the record(s)",
+     "type": "string"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "resource": {
+     "description": "resource key pinning the record to one object: \u003cKindOfObject\u003e/\u003cnamespace\u003e/\u003cname\u003e (namespace segment empty for cluster-scoped objects, e.g. Node//gke-node-1). Required to write",
+     "type": "string"
+    },
+    "root_cause": {
+     "description": "root-cause hypothesis one-liner",
+     "type": "string"
+    },
+    "session": {
+     "description": "incident session id that produced this record — the paper trail's pointer back to the transcript",
+     "type": "string"
+    },
+    "severity_override": {
+     "description": "your routing judgment for further signals of this incident: critical|warning|info (empty = keep the signal's own class). Honored by sentinel routing and health scans while the record is open",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "status": {
+     "description": "triage state to record: investigating|triaged|actioned|escalated (resolved is written by the sentinel's §7.4 recovery flip, never by agents). Empty = read mode: print the current record(s) instead of writing",
+     "type": "string"
+    },
+    "store": {
+     "description": "path to the sentinel's SQLite store (its --store file). Required: triage-status records live in the sentinel's --store SQLite file (§9.4); see docs/triage-status-write-design.md",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": false
+  }
+ },
+ {
+  "name": "k8s_triage_workload",
+  "description": "The first call of every incident: one correlated snapshot of a workload — sanitized spec, everything abnormal, broken dependency edges, blast radius, distilled logs — sectioned into a single payload instead of 4–5 separate reads.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): section — which bundle section the finding belongs to: spec|delta|edges|radius|logs; sections — on the bundle.target head finding: the sections that follow; skipped — on the bundle.target head finding: comma-separated resources the List pass could not read (denied) or was told to omit (--lists) — the bundle is a documented partial, secret-free by default under a least-privilege role; relation — radius neighbor's relation to the target: upstream (routes/owns/governs it), downstream (it points at), lateral (shares a node/volume/config); hop — radius neighbor's BFS depth from the target (1 = direct edge); triage_status — triage state from the matched §9.4 record (investigating|triaged|actioned|escalated) — present only with --store on merged findings; triage_root_cause — the incident agent's root-cause hypothesis, from the matched triage-status record; triage_action — the incident agent's paper trail (PRs opened, escalations), from the matched triage-status record; triage_session — incident session that wrote the matched triage-status record; triage_age — how long ago the matched triage-status record was last updated; labels — resource labels as sorted k=v pairs; owner — controlling owner as Kind/name; phase — status.phase, only when abnormal for the kind (zero nominal state); node — node the pod is scheduled on; service_account — pod's service account; volumes — pod volumes as name:source (source names its referent, never its payload); container — container name (one spec.container finding per container); init — \"true\" when the container is an init container; image — container image reference; requests — resource requests as sorted k=v pairs; limits — resource limits as sorted k=v pairs; ports — container or service ports, compact ([name:]port[-\u003etarget][/proto]); liveness — liveness probe one-liner (kind, target, non-default timings); readiness — readiness probe one-liner; env — env vars; literal credential values are [REDACTED], valueFrom entries render as named references; env_from — envFrom sources as kind:name; replicas — desired replica count; strategy — rollout strategy summary (type + non-default knobs); selector — workload/service selector as sorted k=v pairs; type — Service or Secret type, only when non-default; external_name — ExternalName service target; session_affinity — service session affinity, only when not None; keys — ConfigMap/Secret data KEYS with byte sizes — values are never rendered; condition — abnormal status condition as Type=Status; since — the condition's lastTransitionTime; spec — kinds without a dedicated renderer: sanitized spec flattened to path=value pairs; restarts — container restart count; exit_code — exit code of the container's last termination; last_state — reason of the container's last termination (e.g. OOMKilled); age — how long the abnormal state has persisted; desired — desired replica/scheduled count from spec; ready — ready count from status; updated — updated-to-current-revision count from status; available — available count from status; failed — failed pod count of a Job; taint — taint key indicating reclaim/drain; pods — pods affected (behind a cordoned node or a PDB); healthy — currently healthy pods behind a PDB; required — pods the PDB requires healthy; addon — system add-on role: dns, proxy, cni, csi, metrics, connectivity; resource — ResourceQuota resource name at or near its limit; used — quota usage from status; hard — quota hard limit from status; pct — quota usage as percent of the hard limit; template — log template; \u003c*\u003e marks positions that varied across merged lines; count — lines merged into this cluster (on log.probe_noise: probe lines stripped); level — guessed log level (fatal|error|warn|info|debug) from token/field match; first_seen — RFC3339 timestamp of the oldest merged line (from log timestamps when parseable); last_seen — RFC3339 timestamp of the newest merged line; lang — stack-trace runtime on log.stacktrace findings: go|java|python; frames — top stack frames on log.stacktrace findings, innermost first, ' \u003c ' separated; sample — one representative raw line, truncated and sanitized; omitted_templates — clusters dropped by --max-templates (log.overflow only); omitted_lines — lines inside the dropped clusters (log.overflow only); workload — the targeted workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, stamped on every finding; volume — pod volume whose ConfigMap/Secret reference is broken; key — the referenced key that is missing from the ConfigMap/Secret; selected — pods the Service selector currently selects; endpoints — total endpoints across the Service's EndpointSlices; slices — how many EndpointSlices back the Service; service — the Service a slice or Ingress backend refers to; pod — pod named by an orphaned endpoint targetRef; subject — TLS certificate subject (CN when set); never key material; not_after — TLS certificate NotAfter, RFC 3339; days_left — whole days until NotAfter (negative = expired); via — how a TLS secret is reachable from the workload: mount or ingress; ingress — Ingress referencing the TLS secret; host — Ingress rule host of the broken backend (empty for the default backend); path — Ingress rule path of the broken backend; port — Service port (name or number) the Ingress backend asks for; role_ref — dangling roleRef as \u003cKind\u003e/\u003cname\u003e.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "cert_warn": {
+     "default": "720h",
+     "description": "report TLS certificates expiring within this window (edges section) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "depth": {
+     "default": 2,
+     "description": "blast-radius traversal depth: graph edges followed per direction in the radius section",
+     "type": "integer"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "incident": {
+     "description": "inject payload JSON (the message a lookout-watch incident session starts with); its object reference resolves to the target workload via the owner chain — alternative to --workload",
+     "type": "string"
+    },
+    "lists": {
+     "default": "all",
+     "description": "which cluster resources the List pass reads: 'all' (default), a comma-separated allowlist (pods,deployments), or subtractions (all,-secrets) for a least-privilege posture. Denied or deselected lists degrade to a partial bundle with a skipped= note on the head, never an error.",
+     "type": "string"
+    },
+    "lists_preflight": {
+     "description": "before listing, SelfSubjectAccessReview each selected resource and drop the denied ones proactively (fewer 403s); falls back to reactive Forbidden-skip if SSAR is not permitted",
+     "type": "boolean"
+    },
+    "max_templates": {
+     "default": 15,
+     "description": "cap distilled log template clusters in the logs section (triage logs defaults to 40; the bundle keeps the tighter budget)",
+     "type": "integer"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "store": {
+     "description": "path to a sentinel's SQLite store (its --store file); merges open §9.4 triage-status records so the bundle's findings carry triage_* fields and severity reflects the agent's override",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_volume_conflicts",
+  "description": "When pods hang in ContainerCreating with Multi-Attach or FailedAttachVolume events — join VolumeAttachment + PV/PVC + pods to name the exact conflict: RWO claims wanted on two nodes, attachments stuck in error, cross-zone PV locks, orphaned attachments.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): pods — scheduled pods referencing the conflicted claim, sorted (list capped, then +K more); nodes — distinct nodes those pods are scheduled on, sorted; access_modes — the claim's declared access modes; pv — PersistentVolume behind the claim or attachment; pvc — PersistentVolumeClaim the pod mounts (same namespace as the pod); node — node the attachment targets or the pod is scheduled on; attacher — CSI driver responsible for the attachment (spec.attacher); age — how long the attach/detach error has persisted, truncated to seconds; error — the attach/detach error message, truncated to 200 chars; attached — the attachment's status.attached at scan time; pv_zones — zones the PV's node affinity allows, sorted; node_zone — zone label of the node the pod is scheduled on; orphan — which referenced side is gone: \"pv missing\", \"node missing\", or both.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ },
+ {
+  "name": "k8s_workload_identity",
+  "description": "When a GKE pod gets 403s or metadata-server errors calling GCP APIs, verify the Workload Identity chain — KSA annotation (iam.gke.io/gcp-service-account) → roles/iam.workloadIdentityUser binding on the GSA — reporting only the broken links; vanilla clusters report an explicit unavailable.\nOutput: one finding per line (logfmt; format=json for JSON), terminated by the mandatory summary line scanned=\u003cn\u003e findings=\u003cn\u003e elapsed=\u003cd\u003e — findings=0 with a summary present means scanned-and-healthy; a result without a summary line is void.\nFields beyond the shared envelope (kind, severity, namespace, kind_of_object, name, reason, message, fingerprint): gsa — the cloud identity (GSA email) the ServiceAccount's annotation claims; pods — how many in-scope pods run as the affected ServiceAccount; problem — machine-matchable problem code from the provider (e.g. no-workload-identity-binding); container — container carrying the GOOGLE_APPLICATION_CREDENTIALS env var; env — the credential-file env var found (GOOGLE_APPLICATION_CREDENTIALS); capability — cloud.unavailable: the provider capability this command needed (workload-identity); provider — cloud.unavailable: the provider that was asked; unavailable — summary-line note (§2 marker): why the cloud read could not be served.",
+  "inputSchema": {
+   "properties": {
+    "all_namespaces": {
+     "description": "scan all namespaces",
+     "type": "boolean"
+    },
+    "format": {
+     "default": "logfmt",
+     "description": "output format: logfmt|json (one record per line either way)",
+     "type": "string"
+    },
+    "namespace": {
+     "description": "limit the scan to one namespace",
+     "type": "string"
+    },
+    "since": {
+     "description": "how far back to look (0 = command default) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "timeout": {
+     "default": "10s",
+     "description": "abort the invocation after this long (exit 1) (Go duration, e.g. \"90s\", \"5m\")",
+     "pattern": "^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+     "type": "string"
+    },
+    "workload": {
+     "description": "target one workload as \u003cKind\u003e/\u003cnamespace\u003e/\u003cname\u003e, e.g. Deployment/prod/api",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "annotations": {
+   "idempotentHint": false,
+   "readOnlyHint": true
+  }
+ }
+]
