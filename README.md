@@ -183,3 +183,7 @@ the fingerprint everything downstream keys on — is checked against upstream's
 Python itself, pinned to a named upstream commit and its file hash so the
 comparison cannot silently re-baseline against a moved target. See
 `dev/diffcheck.py` and `internal/monitor/golden_test.go`.
+
+## License
+
+Apache 2.0 — see [LICENSE](./LICENSE).
