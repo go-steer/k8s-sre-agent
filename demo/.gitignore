@@ -1,0 +1,17 @@
+# Built artefacts. scripts/build.sh puts every binary the demo needs here, from
+# sources that live in sibling checkouts — nothing in bin/ is authored here and
+# none of it should be committed.
+/bin/*
+!/bin/.gitkeep
+
+# `go build ./tools/...` from the repo root drops binaries here rather than in
+# bin/. Ignored so one absent-minded build does not get committed.
+/fake-ingress
+
+# Per-run state: the throwaway cluster's kubeconfig and the finding-diff store.
+/run/
+
+# Slack credentials. scripts/common.sh sources this when it exists, which is
+# the whole real-Slack switch — so it holds live xapp-/xoxb- tokens and must
+# never be committed. scripts/slack.env.example is the checked-in shape.
+/scripts/slack.env
