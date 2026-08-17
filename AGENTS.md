@@ -8,10 +8,11 @@ A Go port of LangChain's Python `sre-agent` — an autonomous Kubernetes SRE
 agent that monitors cluster health, diagnoses issues, and applies fixes behind
 human approval.
 
-The upstream project lives at `../langchain-samples/sre-agent` and is the
-reference implementation. Read it before changing behaviour here; most design
-decisions in this repo are either a faithful port of one of theirs or a
-deliberate, documented divergence.
+Upstream is [`langchain-samples/sre-agent`](https://github.com/langchain-samples/sre-agent)
+and is the reference implementation. Read it before changing behaviour here;
+most design decisions in this repo are either a faithful port of one of theirs
+or a deliberate, documented divergence. `dev/diffcheck.py` fetches it at a
+pinned commit, so no checkout of it is needed to work here.
 
 ## Status
 
@@ -63,11 +64,15 @@ Early. What exists:
   No ground truth, so nothing is scored; what it measures is what a fixture
   cannot (see the tier-3 notes).
 
-All three run against Vertex, read-only: they build the agent with no
+- `cmd/sre-monitor` — the deployed shape: the bounded pass on a cycle, the
+  finding diff deciding what escalates, the daily floor, and digests posted to
+  Slack through `switchboard`.
+
+All four run against Vertex, read-only: they build the agent with no
 `Config.Writes`, so the write specialist is not wired up at all and the
-published numbers are numbers for the read path. Not built yet: the scheduler,
-Slack, and any entry point that actually grants writes — `kubewrite.Tools` and
-`approval.Session` exist and nothing calls them together outside tests.
+published numbers are numbers for the read path. Still not built: any entry
+point that actually grants writes — `kubewrite.Tools` and `approval.Session`
+exist and nothing calls them together outside tests.
 
 **The finding diff came off that list without us building it.** k8s-lookout
 shipped it (issue #212) as `k8s_findings_diff` / `k8s_findings_ack`, keyed on a
@@ -317,6 +322,13 @@ possible test, which is an argument for smoking new wiring against a namespace
 with nothing wrong in it rather than one full of faults.
 
 ### Tier 3 for the scheduler: 30 minutes on `simian-test` (2026-08-15)
+
+`simian-test`, here and everywhere below, is one specific GKE cluster of ours —
+94 days old, built by somebody else, running real workloads nobody prepared for
+this. It is named rather than anonymised because these are records of what was
+measured and where, and a number is worth less when you cannot tell whether two
+of them came from the same place. Nothing in the repo requires it: every tier-3
+command takes a context and a namespace.
 
 `cmd/sre-monitor` against the real GKE cluster, 3-minute interval, floor 24h over
 `online-boutique,prod-checkout`, cap 2, heartbeat every 4 quiet cycles. Ten
@@ -1373,8 +1385,13 @@ the four audit specialists must **report their own coverage gaps**: lookout has
 no probe/`:latest`/pod-security checks, and a security report that silently
 omits a category reads as a clean bill of health.
 
-`mast` is resolved through a `replace` directive to `/home/user/projects/mast`
-because it is private during early access.
+`mast` is resolved through a `replace` directive to a checkout beside this one,
+because this repo uses APIs that are on mast's `main` but not in its latest tag
+— `agent.FinishOnStall`, `agent.StallText`, and the `DisallowTransferToParent` /
+`DisallowTransferToPeers` / `AfterModelCallbacks` fields of `TaskAgentConfig`.
+Building against `v0.3.0` fails on exactly those five. The `replace` goes away
+when mast tags a release carrying them; it is not a preference. (It predates
+that: mast was private during early access, which is no longer the reason.)
 
 ## Commands
 
@@ -1392,27 +1409,33 @@ go vet ./...
 # vectors — see the header of dev/diffcheck.py for bumping the pin.
 go generate ./internal/monitor
 
-# Tier-1 evals (needs Vertex credentials)
-source ~/scripts/claude-env.sh
+# Tier-1 evals. Model calls need application-default credentials plus a project
+# and a location: ANTHROPIC_VERTEX_PROJECT_ID or GOOGLE_CLOUD_PROJECT, and
+# CLOUD_ML_REGION or GOOGLE_CLOUD_LOCATION.
 go run ./cmd/sre-eval -out /tmp/eval.json -concurrency 3 -v
 
 # Tier-2 evals (needs Vertex credentials, docker, kind, and a lookout binary).
 # Creates its own kind cluster, injects the faults, and deletes it on the way
-# out — including on ^C. -keep leaves it up for inspection.
+# out — including on ^C. -keep leaves it up for inspection. lookout is built
+# from a checkout beside this one and never appears in go.mod; see "import,
+# don't fork" for why it is a subprocess.
+git clone https://github.com/go-steer/k8s-lookout ../k8s-lookout
 go build -o /tmp/lookout ../k8s-lookout/cmd/lookout
 SRE_LOOKOUT_BIN=/tmp/lookout go run ./cmd/sre-eval-live -out /tmp/eval-live.json -v
 
-# Tier 3: one read-only assessment of a cluster that already exists.
+# Tier 3: one read-only assessment of a cluster that already exists. Substitute
+# your own context and namespaces; the tier-3 sections below record runs against
+# a GKE cluster called simian-test, which is ours and is not something you have.
 # Both flags are required — nothing here resolves the ambient current-context —
 # and the kubeconfig must describe exactly one context, so minify it first.
-kubectl config view --minify --flatten --context=simian-test > ~/kubeconfig-simian-test
+kubectl config view --minify --flatten --context="$CTX" > ~/kubeconfig-"$CTX"
 SRE_LOOKOUT_BIN=/tmp/lookout go run ./cmd/sre-agent \
-  -kubeconfig ~/kubeconfig-simian-test -context simian-test \
-  -namespace online-boutique,prod-checkout -out /tmp/gke.json -v
+  -kubeconfig ~/kubeconfig-"$CTX" -context "$CTX" \
+  -namespace ns-one,ns-two -out /tmp/gke.json -v
 
 # The same path as a guided manual check: preflight, hermetic tests, a minified
 # kubeconfig, each of the three refusals firing, then one real assessment.
-dev/smoketest.sh simian-test online-boutique
+dev/smoketest.sh "$CTX" ns-one
 
 # Recapture lookout's MCP tool surface after upgrading the binary. This one
 # takes -bin rather than SRE_LOOKOUT_BIN — it spawns lookout itself instead of
