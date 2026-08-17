@@ -1385,13 +1385,28 @@ the four audit specialists must **report their own coverage gaps**: lookout has
 no probe/`:latest`/pod-security checks, and a security report that silently
 omits a category reads as a clean bill of health.
 
-`mast` is resolved through a `replace` directive to a checkout beside this one,
-because this repo uses APIs that are on mast's `main` but not in its latest tag
-— `agent.FinishOnStall`, `agent.StallText`, and the `DisallowTransferToParent` /
-`DisallowTransferToPeers` / `AfterModelCallbacks` fields of `TaskAgentConfig`.
-Building against `v0.3.0` fails on exactly those five. The `replace` goes away
-when mast tags a release carrying them; it is not a preference. (It predates
-that: mast was private during early access, which is no longer the reason.)
+`mast` is an ordinary module requirement, pinned to `v0.4.0` (2026-08-17). The
+`replace` directive to a local checkout is gone: it existed first because mast
+was private during early access, then because we used five APIs
+(`agent.FinishOnStall`, `agent.StallText`, and `TaskAgentConfig`'s
+`DisallowTransferToParent` / `DisallowTransferToPeers` / `AfterModelCallbacks`)
+that `v0.3.0` did not carry. `v0.4.0` carries all five.
+
+**Every baseline recorded above predates that upgrade, and one v0.4.0 fix means
+they are not comparable to anything measured after it.** Before v0.4.0, mast's
+Anthropic converter read only the typed `Parameters` field of a function
+declaration. ADK's `mcptoolset` populates `ParametersJsonSchema` instead
+(`tool/mcptoolset/tool.go:51`), so *every lookout tool* reached Claude as
+`{"type":"object","properties":{}}` — a name, a description, and no arguments.
+The model was inferring `namespace` and `name` from prose in the tool
+description. `v0.4.0`'s `pkg/providers/anthropic/convert.go:395` handles the
+field; `v0.3.0`'s file has no such case, which is checkable in the module cache
+rather than taken from the release notes.
+
+Two consequences. Re-run the tiers before comparing any new number to an old
+one. And task #20 — filling an omitted `namespace` at the lookout toolset
+boundary — was a workaround for a model that could not see the parameter it was
+omitting; measure whether it is still needed before keeping it.
 
 ## Commands
 

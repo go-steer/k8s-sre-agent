@@ -2,10 +2,8 @@ module github.com/go-steer/k8s-sre-agent
 
 go 1.26.6
 
-replace github.com/go-steer/mast => /home/user/projects/mast
-
 require (
-	github.com/go-steer/mast v0.0.0-00010101000000-000000000000
+	github.com/go-steer/mast v0.4.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	google.golang.org/adk/v2 v2.2.0
 	google.golang.org/genai v1.66.0

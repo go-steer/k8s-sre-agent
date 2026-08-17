@@ -4,11 +4,9 @@ An autonomous Kubernetes SRE agent in Go. It watches a cluster, diagnoses what
 is wrong in the operator's own terms, and can fix things — but never without a
 human approving the exact command first.
 
-> **Early, and it does not build from a clean clone yet.** `go.mod` resolves
-> [`go-steer/mast`](https://github.com/go-steer/mast) through a `replace` to a
-> local path, because this repo uses mast APIs that are on mast's `main` but not
-> in its latest tag (`v0.3.0`). Until there is a release carrying them, building
-> requires a mast checkout beside this one. See [Building](#building).
+> **Early.** The baselines below the fold predate `mast v0.4.0`, which fixed a
+> silent defect in how tool parameters reached Claude, so they were measured on
+> a substrate that no longer exists. Treat them as history until they are re-run.
 
 ## What it does
 
@@ -89,13 +87,16 @@ Requires Go 1.26+, and a `lookout` binary for anything that reads a real
 cluster.
 
 ```sh
-git clone https://github.com/go-steer/mast ../mast          # see the note above
 git clone https://github.com/go-steer/k8s-lookout ../k8s-lookout
 go build -o /tmp/lookout ../k8s-lookout/cmd/lookout
 
 go build ./...
 go test ./...        # hermetic: no cluster, no credentials, no network
 ```
+
+`mast` is an ordinary module requirement. `k8s-lookout` deliberately is not —
+it is spawned as a subprocess, never linked, so it is built from a checkout
+rather than resolved by the module graph.
 
 Model calls go to Claude on Vertex AI, and need application-default credentials
 plus a project and location in the environment — `ANTHROPIC_VERTEX_PROJECT_ID`
