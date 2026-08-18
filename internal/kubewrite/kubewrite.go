@@ -59,10 +59,13 @@
 // There is no ungated write. The confirmation is applied by the executor that
 // every tool routes through, not by a per-tool flag, and not by a list of tool
 // names kept somewhere else. Upstream keeps such a list
-// (CHANGE_EXECUTOR_INTERRUPT_ON) and it is already missing two of its own
-// mutating tools — kubectl_patch_configmap and kubectl_apply_custom_resource
-// are defined and not listed. A gate you have to remember to extend is a gate
-// that eventually is not extended.
+// (CHANGE_EXECUTOR_INTERRUPT_ON), maintained by hand alongside the separate
+// list of tools the subagent is given, and the two have already drifted: three
+// mutating tools — kubectl_patch_configmap, kubectl_apply_custom_resource and
+// kubectl_delete_resource — are defined and exported but absent from it.
+// Nothing is ungated there today, because those three are also attached to no
+// agent; what is missing is any reason they could not be. A gate you have to
+// remember to extend is a gate that eventually is not extended.
 package kubewrite
 
 import (

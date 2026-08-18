@@ -19,8 +19,8 @@
 // cmd/sre-agent for a one-shot assessment and cmd/sre-monitor for the
 // scheduler — and safety code that has to be remembered and re-pasted is safety
 // code that eventually is not. That is the same argument the write gate makes
-// about upstream's CHANGE_EXECUTOR_INTERRUPT_ON list, which is already missing
-// two of its own mutating tools.
+// about upstream's CHANGE_EXECUTOR_INTERRUPT_ON list, which has already
+// drifted from the tool list it is meant to shadow.
 //
 // None of this makes the *cluster* safe: tier 3 runs against simian-test with
 // admin credentials, because that is what the cluster has. It makes our binary

@@ -2815,10 +2815,14 @@ can undo it:
    `internal/kubewrite` routes through `executor.apply`, which raises the
    confirmation itself. There is no ungated path and deliberately no unexported
    variant that skips it. Upstream gates by *listing* the mutating tools
-   (`CHANGE_EXECUTOR_INTERRUPT_ON`) and that list is already missing two of its
-   own — `kubectl_patch_configmap` and `kubectl_apply_custom_resource` are
-   defined and unlisted. A gate you have to remember to extend is a gate that
-   eventually is not extended.
+   (`CHANGE_EXECUTOR_INTERRUPT_ON`), hand-maintained beside the separate list
+   of tools the subagent is handed, and the two have already drifted:
+   `kubectl_patch_configmap`, `kubectl_apply_custom_resource` and
+   `kubectl_delete_resource` are defined and exported but unlisted. Be precise
+   about what that is and is not — none of the three is attached to any agent,
+   so no write executes ungated upstream today. The point is that only memory
+   was keeping that true, and memory had already slipped by three tools. A gate
+   you have to remember to extend is a gate that eventually is not extended.
 2. **Only one agent is handed the tools, and the binding is Go-side.** `Build`
    gives `Config.Writes` to `change-executor` and to nothing else, and skips
    the spec entirely when `Writes` is empty.
