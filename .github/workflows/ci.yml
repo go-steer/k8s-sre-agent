@@ -1,0 +1,91 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# CI. Every step runs a script under dev/ci/presubmits/ — the same
+# scripts dev/ci/presubmits/all.sh runs locally — so local presubmit ==
+# CI exactly. Don't add inline check steps here; add a script under
+# dev/ci/presubmits/, wire it into a job below AND into all.sh's steps
+# list. The split into parallel jobs (mast's ci.yml shape) buys
+# wall-clock and per-check status granularity only — the scripts stay
+# the single source of truth.
+#
+# Nothing here needs a cluster, credentials or a model. The unit suite
+# is hermetic by construction and the eval tiers, which are neither,
+# are run deliberately rather than on push (see README.md).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: dev/ci/presubmits/build.sh
+      - name: Vet
+        run: dev/ci/presubmits/vet.sh
+      - name: Format
+        run: dev/ci/presubmits/fmt.sh
+      - name: Test (-race)
+        run: dev/ci/presubmits/test.sh
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Cache the compiled golangci-lint binary. Keep the key's version
+      # in sync with GOLANGCI_LINT_VERSION in dev/tools/lint-go —
+      # ensure_tool finds the cached binary on GOBIN and skips the
+      # (slow, from-source) go install.
+      - uses: actions/cache@v4
+        with:
+          path: ~/go/bin/golangci-lint
+          key: ${{ runner.os }}-golangci-lint-v2.12.1
+      - name: golangci-lint
+        run: dev/ci/presubmits/lint.sh
+
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/cache@v4
+        with:
+          path: ~/go/bin/govulncheck
+          key: ${{ runner.os }}-govulncheck
+      - name: go mod tidy is clean
+        run: dev/ci/presubmits/mod-tidy.sh
+      - name: govulncheck
+        run: dev/ci/presubmits/vuln.sh
+      - name: dependency invariants
+        run: dev/ci/presubmits/deps.sh

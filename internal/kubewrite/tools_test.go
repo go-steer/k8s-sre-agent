@@ -123,10 +123,10 @@ var toolCases = []toolCase{{
 }, {
 	tool: "kubectl_delete_custom_resource",
 	args: map[string]any{
-		"group": "langchain.com", "plural": "langgraphplatforms",
+		"group": "monitoring.coreos.com", "plural": "prometheuses",
 		"name": "platform-1", "namespace": "prod",
 	},
-	want:   [][]string{{"delete", "langgraphplatforms.langchain.com", "platform-1", "-n", "prod"}},
+	want:   [][]string{{"delete", "prometheuses.monitoring.coreos.com", "platform-1", "-n", "prod"}},
 	effect: "Anything its operator reconciles will be torn down with it.",
 }, {
 	tool: "kubectl_delete_custom_resource",

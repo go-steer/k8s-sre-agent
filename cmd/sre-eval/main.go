@@ -20,7 +20,7 @@
 // chooses and how it reports — not whether it can find a fault, which is what
 // the live tier is for.
 //
-//	source ~/scripts/claude-env.sh
+//	export GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=...
 //	go run ./cmd/sre-eval -out /tmp/eval.json
 package main
 

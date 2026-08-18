@@ -48,8 +48,13 @@ func TestNameMustCarryThePrefix(t *testing.T) {
 
 // destroy is the single path to `kind delete`. If it ever stops re-checking
 // the name, a caller that skips Delete's check could remove someone's cluster.
+//
+// The name here is the near miss rather than an obviously foreign one: a
+// prefix test written as HasPrefix(name, "sre-eval") — the constant with its
+// trailing hyphen dropped — accepts this and deletes a cluster we did not
+// make. An unrelated name would pass such a test just as happily.
 func TestDestroyRefusesAForeignCluster(t *testing.T) {
-	err := destroy(context.Background(), "kode-gopher-smoke")
+	err := destroy(context.Background(), "sre-eval")
 	if err == nil {
 		t.Fatal("destroy accepted a cluster it did not create")
 	}
@@ -58,8 +63,10 @@ func TestDestroyRefusesAForeignCluster(t *testing.T) {
 	}
 }
 
+// Likewise on the exported path, with the other near miss: the prefix appears
+// but does not lead, which is what a Contains-based check would wave through.
 func TestDeleteRefusesAForeignCluster(t *testing.T) {
-	c := &Cluster{Name: "agent-sandbox-poc", Context: "kind-agent-sandbox-poc"}
+	c := &Cluster{Name: "team-sre-eval-2", Context: "kind-team-sre-eval-2"}
 	if err := c.Delete(context.Background()); err == nil {
 		t.Fatal("Delete accepted a cluster it did not create")
 	}

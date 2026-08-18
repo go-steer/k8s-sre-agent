@@ -61,7 +61,7 @@ func run(bin, out string) error {
 	if err != nil {
 		return fmt.Errorf("connect to %s mcp: %w", bin, err)
 	}
-	defer sess.Close()
+	defer func() { _ = sess.Close() }()
 
 	res, err := sess.ListTools(ctx, nil)
 	if err != nil {

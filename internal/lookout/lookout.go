@@ -125,6 +125,10 @@ func spawn(cfg Config) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("lookout: locate %q: %w (build it from ../k8s-lookout or set %s)", bin, err, EnvBinary)
 	}
 
+	// #nosec G702 -- resolved is exec.LookPath's answer for an operator-set
+	// binary name, not model or cluster input, and the only argument is a
+	// constant. The child's environment is constructed just below rather than
+	// inherited, which is the containment that actually matters here.
 	cmd := exec.Command(resolved, "mcp")
 	cmd.Env = append([]string{"KUBECONFIG=" + cfg.Kubeconfig}, cfg.Env...)
 	// lookout writes diagnostics to stderr only; stdout is the JSON-RPC
@@ -172,7 +176,7 @@ func Surface(ctx context.Context, cfg Config) ([]ToolInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lookout: connect for tool list: %w", err)
 	}
-	defer sess.Close()
+	defer func() { _ = sess.Close() }()
 
 	res, err := sess.ListTools(ctx, nil)
 	if err != nil {

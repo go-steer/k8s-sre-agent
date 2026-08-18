@@ -123,6 +123,8 @@ func Backoff(attempt int) time.Duration {
 			base = w
 		}
 	}
+	// #nosec G404 -- jitter that spreads concurrent retries apart. Nothing
+	// here is a secret or a token; a CSPRNG would cost entropy for no gain.
 	return base - base/4 + time.Duration(rand.Int64N(int64(base)/2))
 }
 

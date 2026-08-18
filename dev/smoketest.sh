@@ -82,12 +82,12 @@ pass "kubectl present"
 # GOOGLE_CLOUD_PROJECT and the region from CLOUD_ML_REGION or
 # GOOGLE_CLOUD_LOCATION. Sourced rather than required so this works the way the
 # rest of the repo's commands are run. Values are never printed.
-if [[ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}${GOOGLE_CLOUD_PROJECT:-}" && -f "$HOME/scripts/claude-env.sh" ]]; then
-	# shellcheck disable=SC1091
-	source "$HOME/scripts/claude-env.sh" >/dev/null 2>&1 || true
+if [[ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}${GOOGLE_CLOUD_PROJECT:-}" && -n "${SRE_ENV_FILE:-}" && -f "${SRE_ENV_FILE}" ]]; then
+	# shellcheck disable=SC1090
+	source "${SRE_ENV_FILE}" >/dev/null 2>&1 || true
 fi
 if [[ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}${GOOGLE_CLOUD_PROJECT:-}" ]]; then
-	fail "no Vertex project in the environment — source ~/scripts/claude-env.sh first"
+	fail "no Vertex project in the environment — export ANTHROPIC_VERTEX_PROJECT_ID or GOOGLE_CLOUD_PROJECT, or point SRE_ENV_FILE at a file that does"
 fi
 pass "Vertex project configured"
 

@@ -16,6 +16,7 @@ package monitor
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 
@@ -25,23 +26,40 @@ import (
 //go:generate python3 ../../dev/diffcheck.py
 
 // TestGoldenAgainstPython is the differential fidelity check: every vector in
-// testdata/golden.json was produced by executing the upstream Python
-// monitor_state.py, so a mismatch here means the Go port and the Python
-// original disagree about finding identity. That disagreement would be
-// invisible at runtime and would corrupt both the monitoring diff and any
-// eval scored across the two implementations.
+// testdata/golden.json was produced by executing upstream's Python
+// monitor_state.py, so a mismatch here means this implementation and that one
+// disagree about finding identity. That disagreement would be invisible at
+// runtime and would corrupt both the monitoring diff and any eval scored
+// across the two.
 //
-// The vectors name the upstream they came from — golden.json's "source" object
-// carries the commit and the blob hash of monitor_state.py — because evidence
-// that the port matches upstream is worth nothing without saying which
-// upstream. Regenerate with: go generate ./internal/monitor (see
-// dev/diffcheck.py, which fetches that pinned commit itself).
+// The vectors are NOT tracked, and this test skips when they are absent — so
+// on a fresh clone, and in CI, this check does not run. That is deliberate:
+// langchain-samples/sre-agent carries no licence, and vectors produced by
+// executing it are the one artifact in this repo genuinely derived from it.
+// Shipping them would be the strongest form of that derivation, for the
+// weakest reason — the check is just as good run locally.
+//
+// The practical consequence is that a change to Fingerprint or
+// NormalizeResourceName can land without this firing. Anyone touching either
+// runs `go generate ./internal/monitor` first (see dev/diffcheck.py, which
+// fetches the pinned commit itself and needs no checkout), and the t.Log at
+// the end names the upstream the vectors came from — evidence of matching
+// upstream is worth nothing without saying which upstream.
 func TestGoldenAgainstPython(t *testing.T) {
 	raw, err := os.ReadFile("testdata/golden.json")
+	if errors.Is(err, os.ErrNotExist) {
+		t.Skip("no testdata/golden.json — regenerate with `go generate ./internal/monitor` " +
+			"to run the differential check against upstream (see dev/diffcheck.py)")
+	}
 	if err != nil {
 		t.Fatalf("read golden vectors: %v", err)
 	}
 	var golden struct {
+		Source struct {
+			Repo   string `json:"repo"`
+			Commit string `json:"commit"`
+			Blob   string `json:"monitor_state_blob"`
+		} `json:"source"`
 		Norm []struct {
 			Kind string `json:"kind"`
 			Name string `json:"name"`
@@ -85,5 +103,6 @@ func TestGoldenAgainstPython(t *testing.T) {
 			}
 		}
 	}
-	t.Logf("checked %d normalize + %d fingerprint vectors against Python", len(golden.Norm), len(golden.FP))
+	t.Logf("checked %d normalize + %d fingerprint vectors against %s@%s (monitor_state.py blob %s)",
+		len(golden.Norm), len(golden.FP), golden.Source.Repo, golden.Source.Commit, golden.Source.Blob)
 }

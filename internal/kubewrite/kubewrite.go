@@ -89,7 +89,7 @@ const DefaultBinary = kubectl.DefaultBinary
 const DefaultTimeout = kubectl.DefaultTimeout
 
 // DefaultProtectedNamespaces are refused outright rather than left to prompt
-// discipline, ported from upstream's PROTECTED_NAMESPACES.
+// discipline; the same four names upstream lists as PROTECTED_NAMESPACES.
 //
 // Note what the refusal is protecting against. It is not protecting against a
 // malicious agent — a human approves every write, and a human who approves
@@ -107,9 +107,9 @@ var DefaultProtectedNamespaces = []string{
 	"sre-agent",
 }
 
-// DefaultBulkMax caps how many objects one approval may destroy, ported from
-// upstream's BULK_DELETE_MAX. A single approval should not delete more than a
-// person can actually read.
+// DefaultBulkMax caps how many objects one approval may destroy; the same
+// bound upstream sets as BULK_DELETE_MAX. A single approval should not delete
+// more than a person can actually read.
 const DefaultBulkMax = 25
 
 // MaxReplicas bounds every scale.

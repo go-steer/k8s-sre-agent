@@ -35,7 +35,8 @@ const EnvLive = "SRE_LIVE_MODEL"
 // provider.go are real. A wrong model ID fails here as a 404 rather than as
 // a confusing runtime error deep inside the agent loop.
 //
-// Run with: source ~/scripts/claude-env.sh && SRE_LIVE_MODEL=1 go test ./internal/llm/ -v
+// Run with: SRE_LIVE_MODEL=1 go test ./internal/llm/ -v, with Vertex
+// application-default credentials and a project/location in the environment.
 func TestVertexReachable(t *testing.T) {
 	if os.Getenv(EnvLive) == "" {
 		t.Skipf("set %s=1 to run (makes a real Vertex call)", EnvLive)

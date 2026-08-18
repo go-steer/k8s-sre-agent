@@ -87,7 +87,7 @@ func TestPendingIgnoresWhatIsNotWaiting(t *testing.T) {
 	})
 	duplicate := interruptEvent("change-executor", "c1", waiting.Content.Parts[0].FunctionCall.Args)
 	partial := interruptEvent("change-executor", "c2", waiting.Content.Parts[0].FunctionCall.Args)
-	partial.LLMResponse.Partial = true
+	partial.Partial = true
 
 	// An ordinary tool call: same shape, not listed as long-running.
 	ordinary := &session.Event{Author: "change-executor", LLMResponse: model.LLMResponse{

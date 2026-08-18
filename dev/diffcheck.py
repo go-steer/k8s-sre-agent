@@ -18,9 +18,14 @@ The fetch is pinned to UPSTREAM_COMMIT rather than tracking main, and both the
 commit and the blob hash of monitor_state.py are recorded in the output. That
 pin is the point of the whole exercise. Regenerating against whatever upstream
 happens to be that day would move the goalposts and still pass: the vectors are
-evidence that the port matches a *specific* upstream, so which one has to be
-written down. To adopt a newer upstream, bump the two constants below in the
-same commit as the regenerated vectors, and the diff shows what changed.
+evidence of matching a *specific* upstream, so which one has to be written
+down. To adopt a newer upstream, bump the two constants below and regenerate,
+and the diff shows what changed.
+
+The generated file is gitignored on purpose — it is output produced by running
+code that carries no licence, which is the one artifact in this repo genuinely
+derived from that project rather than independently written. The Go test skips
+when it is absent, so this is a check you run, not one CI runs.
 
     python3 dev/diffcheck.py --ref main --allow-drift   # see what moved first
     python3 dev/diffcheck.py --src ~/projects/langchain-samples/sre-agent

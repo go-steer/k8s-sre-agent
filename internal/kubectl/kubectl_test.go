@@ -52,10 +52,18 @@ func TestVerifyContextRefusesAMismatchedKubeconfig(t *testing.T) {
 		t.Errorf("quoted current-context rejected: %v", err)
 	}
 
-	// The names are real ones from this machine's kubeconfig. A check that only
-	// refuses a made-up string is not evidence about the clusters it is meant
-	// to keep away from.
-	for _, live := range []string{"gke_acme_prod", "kode-gopher-smoke", "agent-sandbox-poc"} {
+	// A check that only refuses one made-up string is not evidence about the
+	// clusters it is meant to keep away from, so these cover the shapes a real
+	// kubeconfig holds — a GKE context, a plain local one, and two near-misses
+	// on the pinned name itself. The near-misses are the ones that matter: a
+	// prefix or substring comparison passes every test above and still hands
+	// the caller the wrong cluster.
+	for _, live := range []string{
+		"gke_acme_us-central1_prod",
+		"docker-desktop",
+		"kind-sre-eval-a2",
+		"kind-sre-eval-a1-old",
+	} {
 		other := write("other-"+live, "current-context: "+live+"\n")
 		if err := VerifyContext(other, "kind-sre-eval-a1"); err == nil {
 			t.Errorf("a kubeconfig pinned to %q was accepted", live)

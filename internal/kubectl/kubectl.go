@@ -129,6 +129,10 @@ func (c *Client) exec(ctx context.Context, stdin string, stdout, stderr *bytes.B
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
+	// #nosec G204 -- variable argv is what this type is for. There is no shell:
+	// exec passes argv directly, so the arguments cannot be reinterpreted. The
+	// binary is operator-supplied config, c.context was checked against the
+	// kubeconfig by VerifyContext, and readonly.Guard is what bounds the verbs.
 	cmd := exec.CommandContext(ctx, c.binary, append([]string{"--context", c.context}, args...)...)
 	cmd.Env = []string{
 		"KUBECONFIG=" + c.kubeconfig,

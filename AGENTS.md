@@ -4,24 +4,44 @@ Instructions for AI coding agents working in this repo, and the design record
 they are drawn from. This is the committed, canonical file; `CLAUDE.md` is
 gitignored and holds personal session context only, as in `k8s-lookout`.
 
-A Go port of LangChain's Python `sre-agent` — an autonomous Kubernetes SRE
-agent that monitors cluster health, diagnoses issues, and applies fixes behind
-human approval.
+An autonomous Kubernetes SRE agent that monitors cluster health, diagnoses
+issues, and applies fixes behind human approval. Inspired by LangChain's
+Python [`sre-agent`](https://github.com/langchain-samples/sre-agent), and
+independently written in Go against a different substrate.
 
-Upstream is [`langchain-samples/sre-agent`](https://github.com/langchain-samples/sre-agent)
-and is the reference implementation. Read it before changing behaviour here;
-most design decisions in this repo are either a faithful port of one of theirs
-or a deliberate, documented divergence. `dev/diffcheck.py` fetches it at a
-pinned commit, so no checkout of it is needed to work here.
+That project is the reference for *behaviour*, and reading it is still the
+fastest way to understand why this one is shaped as it is — most decisions
+here are either a deliberate match for one of theirs or a documented
+divergence, and the sections below say which. `dev/diffcheck.py` fetches it at
+a pinned commit, so no checkout is needed to work here.
+
+**On provenance, because it constrains what this repo may contain.**
+`langchain-samples/sre-agent` publishes no licence — no `LICENSE` file, no
+SPDX headers, no statement in its README or any `.py`. Absent a grant, the
+default is all rights reserved, so nothing here copies it. What was measured
+before deciding that: across all nine specialist prompts the longest run of
+text shared with theirs is 75 characters, and every instance is the opening
+role sentence ("You are a Kubernetes … specialist."). Our specs run
+4,000–6,800 characters each and are written against lookout's tool surface,
+which that project does not have. `Fingerprint` is the one close structural
+correspondence, and unavoidably so — its entire purpose is byte-compatibility.
+The differential vectors, which *are* produced by executing their code, are
+generated locally and deliberately not tracked; see `.gitignore` and
+`internal/monitor/golden_test.go`. Keep it that way: describe this project as
+inspired by theirs, not as a port of it, and do not commit anything derived
+from running their code.
 
 ## Status
 
 Early. What exists:
 
 - `internal/schema` — the `Finding` / `HealthReport` structured-output
-  contract, wire-identical to upstream's `schemas.py`.
-- `internal/monitor` — stable finding fingerprints, verified byte-identical
-  to the Python implementation across 994 differential vectors.
+  contract, wire-compatible with upstream's `schemas.py`.
+- `internal/monitor` — stable finding fingerprints, byte-identical to the
+  Python across ~1,000 differential vectors when the check is run. The vectors
+  are generated locally and untracked, so this does not run in CI — regenerate
+  with `go generate ./internal/monitor` before touching `Fingerprint` or
+  `NormalizeResourceName`.
 - `internal/evals` — the tier-1 eval harness with repaired evaluators.
 - `internal/llm` — the two Vertex model tiers (`claude-sonnet-5` main,
   `claude-haiku-4-5@20251001` subagent).
@@ -1344,10 +1364,28 @@ upstream builds by hand (checkpointing, interrupts, call limits). Forking
 `mast` would inherit its Phase-1 schedule; forking `core-agent` would pin us
 to ADK v1.
 
-**lookout is a runtime dependency, not a compile-time one.** `k8s-lookout`
-depends on `core-agent` → ADK **v1**, while `mast` is ADK **v2**. We consume
-lookout by spawning `lookout mcp` (stdio JSON-RPC), which keeps ADK v1 out of
-our binary entirely. Never add `github.com/go-steer/k8s-lookout` to `go.mod`.
+**lookout is a runtime dependency, not a compile-time one.** We consume it by
+spawning `lookout mcp` (stdio JSON-RPC). Never add
+`github.com/go-steer/k8s-lookout` to `go.mod`;
+`dev/ci/presubmits/deps.sh` fails the build if it ever appears, transitively
+included.
+
+The reason has changed, and the old one is worth recording because it is
+written into a lot of prose. It *used* to be a version split: lookout depended
+on `core-agent` → ADK **v1**, mast is ADK **v2**, and linking both majors into
+one binary was the hazard. That stopped being true at
+`go-steer/k8s-lookout#256` ("own the OTel bootstrap, drop core-agent and ADK")
+— lookout's `go.mod` names neither today. The boundary is still right, for two
+reasons that do not expire:
+
+- **The MCP handshake is the contract.** The agent may use exactly the tools
+  the handshake advertises, and every eval that scores `tool_coverage` assumes
+  that. A compile-time import would let our code reach around the tool surface
+  the model is measured against, and the evals would not notice.
+- **Weight.** Linking lookout pulls `client-go`, three GCP service clients,
+  the Prometheus and OTel exporter stacks, and a SQLite implementation into a
+  binary that needs none of them — and that is exactly the opposite direction
+  from the distroless-static goal.
 
 **Specialists are the config surface.** The nine upstream subagents become
 `mast/pkg/specialists.Spec` values. This repo is the proving ground for
@@ -1414,6 +1452,16 @@ omitting; measure whether it is still needed before keeping it.
 go build ./...
 go test ./...
 go vet ./...
+
+# Everything CI runs, sequentially, ~30s: build, vet, gofmt, golangci-lint,
+# go-mod-tidy, the unit suite under -race, govulncheck, and the dependency
+# invariants. .github/workflows/ci.yml runs these same scripts split across
+# three jobs, so a local pass here means a green build. Run it before pushing.
+# Adding a check means adding a script under dev/ci/presubmits/ and wiring it
+# into BOTH all.sh's steps list and a ci.yml job — an inline step in the
+# workflow makes the local run stop meaning anything.
+dev/ci/presubmits/all.sh
+dev/tools/lint-go --fix        # golangci-lint alone, with autofix
 
 # Regenerate the Python-vs-Go fingerprint vectors after touching monitor/.
 # Fetches upstream's monitor_state.py into a temp dir at a pinned commit and
@@ -2260,7 +2308,7 @@ note applies: the hermetic suite passed throughout.
   remedy, because `Summary`, `Title`, `Detail` and `RecommendedActions` were all
   dropped in rendering. They are rendered now; switchboard chunks a long message
   into ordered in-thread posts, so length was never the objection it looked
-  like. **This was not inherited — it is the port's own regression, and upstream
+  like. **This was not inherited — it is our own regression, and upstream
   has the opposite bias.** `slack_notifier.send_structured_report` renders
   `report.summary` as the body block and each finding as
   `*{f.title}*{ns} — {f.detail}`, with `recommended_actions` in their own
@@ -2650,8 +2698,11 @@ against any context it did not create. Never resolve the ambient
 layers, because a rule enforced only by remembering it is not enforced:
 
 1. **Name prefix.** Every cluster is `sre-eval-*`, and `Delete`/`destroy`
-   refuse any name without the prefix. Tested against the real
-   `kode-gopher-smoke` and `agent-sandbox-poc` names on this machine.
+   refuse any name without the prefix. Tested against near misses rather than
+   obviously foreign names — `sre-eval` without the trailing hyphen, and
+   `team-sre-eval-2` where the prefix appears but does not lead. Those are the
+   two names a `HasPrefix`-minus-the-hyphen or `Contains` implementation would
+   accept, and an unrelated cluster name would not catch either bug.
 2. **Own kubeconfig.** The cluster is created into a file we make. `kind
    create cluster --kubeconfig` *merges* into an existing file rather than
    failing, so `prepareKubeconfig` refuses a path that already exists — the
@@ -2790,9 +2841,9 @@ the gate is only as good as what it shows.
 
 Two refusals sit *before* the human, because the failure they guard against is
 a reviewer skimming rather than an agent misbehaving.
-`DefaultProtectedNamespaces` (ported from upstream) is never the answer to an
-incident, so refusing it costs nothing and removes it from the set of things a
-tired operator can wave through. `MaxReplicas` (500, not in upstream) is there
+`DefaultProtectedNamespaces` (the same four names upstream refuses) is never
+the answer to an incident, so refusing it costs nothing and removes it from the
+set of things a tired operator can wave through. `MaxReplicas` (500, not in upstream) is there
 because a reviewer recognises the *shape* of `kubectl scale deployment/web -n
 prod --replicas=N` and the digits are the part attention skips.
 
@@ -2804,3 +2855,14 @@ prod --replicas=N` and the digits are the part attention skips.
 - Ports of upstream logic carry the upstream test cases, not just new ones.
   Where behaviour must match exactly, prove it differentially against the
   Python implementation rather than by inspection.
+- Every `.go` file carries the Apache 2.0 header. This is enforced, not
+  remembered: `goheader` in `dev/tools/.golangci.yml` fails the lint on a file
+  without one, so a new file is caught at `dev/ci/presubmits/all.sh` rather
+  than at a licence audit. Shell and Python files carry it by convention only.
+- The lint config is a copy of mast's, deliberately — same pinned
+  `golangci-lint`, same linter set, same settings. A good deal of this repo is
+  written against mast's APIs, and code that lints differently on the two
+  sides of that boundary makes moving anything across it an argument about
+  style. Where a check is silenced it is silenced at the call site with a
+  reason (`// #nosec G204 -- ...`), not globally, so the next reader can judge
+  whether the reason still holds.

@@ -15,9 +15,10 @@
 // Package monitor turns a stateless health check into an incident tracker:
 // stable finding identity and run-to-run diffing.
 //
-// Ported from the upstream Python project's monitor_state.py. Everything here
-// is a pure function over plain data so it is testable without a cluster or a
-// database.
+// Behaviour-compatible with the Python project's monitor_state.py, which is
+// the design this follows: identity has to agree between the two or a finding
+// that persists reads as a new incident. Everything here is a pure function
+// over plain data so it is testable without a cluster or a database.
 //
 // Why it exists upstream: the scheduled check had no memory, so a cluster
 // problem that persisted for a week was re-reported identically every

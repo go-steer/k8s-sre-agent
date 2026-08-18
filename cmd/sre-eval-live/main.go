@@ -23,7 +23,7 @@
 // This is the tier that measures diagnosis. Tier 1 states the fault in the
 // prompt, so it can only measure narration and tool selection.
 //
-//	source ~/scripts/claude-env.sh
+//	export GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=...
 //	go build -o /tmp/lookout ../k8s-lookout/cmd/lookout
 //	SRE_LOOKOUT_BIN=/tmp/lookout go run ./cmd/sre-eval-live -v
 //
@@ -86,7 +86,6 @@ func main() {
 	// command leaks a container. Trapping it makes teardown the default even
 	// when the run is abandoned.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	cfg := runConfig{
 		out: *out, only: *only, conc: *conc, specDir: *specDir,
@@ -94,7 +93,12 @@ func main() {
 		keep: *keep, clusterID: *clusterID, verbose: *verbose,
 		maxCost: *maxCost, maxTurns: *maxTurns, bounded: *useBnd,
 	}
-	if err := run(ctx, cfg); err != nil {
+	err := run(ctx, cfg)
+	// Not deferred: log.Fatal below exits without unwinding, and
+	// signal.NotifyContext's stop is documented as needing to be called
+	// to release its resources.
+	stop()
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -334,7 +338,7 @@ func scoreOne(ctx context.Context, a scoreArgs) (evals.Run, error) {
 		return evals.Run{}, fmt.Errorf("lookout toolset: %w", err)
 	}
 	if closer, ok := live.(interface{ Close() error }); ok {
-		defer closer.Close()
+		defer func() { _ = closer.Close() }()
 	}
 
 	// The enumeration tool reads the same cluster, pinned the same way. It is

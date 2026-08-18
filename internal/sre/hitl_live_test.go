@@ -67,7 +67,7 @@ import (
 // Gated on a live model because the flow only exists if a model decides to call
 // the tool; there is no way to provoke a real confirmation event offline.
 //
-//	source ~/scripts/claude-env.sh
+//	export GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=...
 //	SRE_LIVE_MODEL=1 go test ./internal/sre/ -run TestHITL -v
 
 const envLiveModel = "SRE_LIVE_MODEL"

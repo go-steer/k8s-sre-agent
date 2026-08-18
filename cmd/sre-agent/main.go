@@ -24,7 +24,7 @@
 // actually present, partial RBAC, and whether the agent invents an incident in
 // a namespace that is merely noisy.
 //
-//	source ~/scripts/claude-env.sh
+//	export GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=...
 //	kubectl config view --minify --flatten --context=CTX > /tmp/kubeconfig-CTX
 //	SRE_LOOKOUT_BIN=... go run ./cmd/sre-agent \
 //	  -kubeconfig /tmp/kubeconfig-CTX -context CTX -namespace some-ns -v
@@ -95,7 +95,6 @@ func main() {
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	cfg := runConfig{
 		kubeconfig: *kubeconfig, kubecontext: *kubecontext,
@@ -104,7 +103,12 @@ func main() {
 		timeout: *timeout, retryFor: *retryFor,
 		maxCost: *maxCost, maxTurns: *maxTurns, verbose: *verbose,
 	}
-	if err := run(ctx, cfg); err != nil {
+	err := run(ctx, cfg)
+	// Not deferred: log.Fatal below exits without unwinding, and
+	// signal.NotifyContext's stop is documented as needing to be called
+	// to release its resources.
+	stop()
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -249,7 +253,7 @@ func assess(ctx context.Context, a assessArgs) (evals.Run, error) {
 		return evals.Run{}, fmt.Errorf("lookout toolset: %w", err)
 	}
 	if closer, ok := live.(interface{ Close() error }); ok {
-		defer closer.Close()
+		defer func() { _ = closer.Close() }()
 	}
 	live = readonly.WithoutTools(live, a.withheld)
 

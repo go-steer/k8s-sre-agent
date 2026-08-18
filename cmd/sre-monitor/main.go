@@ -18,7 +18,7 @@
 // two eval harnesses and cmd/sre-agent — answers a question once and exits; this
 // one keeps answering it, which is what the agent was ported to do.
 //
-//	source ~/scripts/claude-env.sh
+//	export GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=...
 //	kubectl config view --minify --flatten --context=CTX > /tmp/kubeconfig-CTX
 //	SRE_LOOKOUT_BIN=... go run ./cmd/sre-monitor \
 //	  -kubeconfig /tmp/kubeconfig-CTX -context CTX \
@@ -104,7 +104,6 @@ func main() {
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	cfg := runConfig{
 		kubeconfig: *kubeconfig, kubecontext: *kubecontext,
@@ -114,7 +113,12 @@ func main() {
 		maxCost: *maxCost, maxTurns: *maxTurns, once: *once, verbose: *verbose,
 		sbURL: *sbURL, sbConv: *sbConv,
 	}
-	if err := run(ctx, cfg); err != nil {
+	err := run(ctx, cfg)
+	// Not deferred: log.Fatal below exits without unwinding, and
+	// signal.NotifyContext's stop is documented as needing to be called
+	// to release its resources.
+	stop()
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -301,7 +305,7 @@ func (e *agentEscalator) Escalate(ctx context.Context, ns string, why []schedule
 		return nil, fmt.Errorf("lookout toolset: %w", err)
 	}
 	if closer, ok := live.(interface{ Close() error }); ok {
-		defer closer.Close()
+		defer func() { _ = closer.Close() }()
 	}
 	enum, err := kuberead.Toolset(kuberead.Config{
 		Kubeconfig: e.cfg.kubeconfig,

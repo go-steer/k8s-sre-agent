@@ -26,7 +26,7 @@ this repo's module.
 ```sh
 ./scripts/build.sh                       # → bin/
 ./scripts/cluster.sh up                  # throwaway kind cluster, healthy
-source ~/scripts/claude-env.sh           # Vertex credentials
+export GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=...   # Vertex
 
 ./scripts/monitor.sh --once --quiet-ok   # a cycle on a healthy cluster
 ./scripts/fault.sh inject                # break it

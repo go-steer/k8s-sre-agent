@@ -15,10 +15,10 @@
 // Package schema defines the structured-output contract shared by the SRE
 // agent, the monitoring loop, and the eval harness.
 //
-// This is a port of the upstream Python project's schemas.py. The field names
-// and JSON encoding are kept wire-identical so the same eval dataset scores
-// both implementations and a HealthReport produced by either is readable by
-// the other.
+// The contract follows the upstream Python project's schemas.py: field names
+// and JSON encoding are deliberately kept wire-compatible so the same eval
+// dataset scores both implementations and a HealthReport produced by either is
+// readable by the other.
 //
 // The load-bearing design point is that a Finding carries machine-stable
 // identity fields (Kind / ResourceName / Reason) alongside the human-facing

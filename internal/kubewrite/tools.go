@@ -671,8 +671,8 @@ func planDeleteBulk(e *executor, a deleteBulkArgs) (string, []step, error) {
 }
 
 type deleteCustomResourceArgs struct {
-	Group     string `json:"group" jsonschema:"the API group, e.g. langchain.com"`
-	Plural    string `json:"plural" jsonschema:"the resource's plural name, e.g. langgraphplatforms"`
+	Group     string `json:"group" jsonschema:"the API group, e.g. monitoring.coreos.com"`
+	Plural    string `json:"plural" jsonschema:"the resource's plural name, e.g. prometheuses"`
 	Name      string `json:"name" jsonschema:"the custom resource's name"`
 	Namespace string `json:"namespace,omitempty" jsonschema:"omit for a cluster-scoped custom resource"`
 }
