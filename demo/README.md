@@ -4,19 +4,23 @@ Scripts for running the SRE agent end to end on a laptop: a throwaway cluster, a
 fault you inject on purpose, the monitoring loop noticing it, and a digest
 landing in chat.
 
-Nothing here is a library, and nothing here imports the agent. It builds each
-binary by shelling `go build` in the module that owns it and drops them all in
-one `bin/`, which is the only thing the pieces need in common — `k8s-lookout` is
-a subprocess and switchboard is an HTTP service, so neither is a Go dependency
-of anything here. That is not incidental for lookout: it depends on `core-agent`
-and ADK v1 while this repo is on `mast` and ADK v2, and linking both majors into
-one binary is what the consume-lookout-over-MCP rule exists to prevent.
+Nothing here is a library, and nothing here imports the agent. `build.sh` puts
+six binaries in one `bin/`, which is the only thing the pieces need in common —
+`k8s-lookout` is a subprocess and switchboard is an HTTP service, so neither is
+a Go dependency of anything here.
 
 ```
-..                    the agent, the bounded pass, the scheduler (this repo)
-../../k8s-lookout     the read path, consumed as a subprocess
-../../switchboard     the chat gateway (optional — see "Chat")
+..            the agent, the bounded pass, the scheduler (this repo)
+lookout       the read path, consumed as a subprocess — installed at a pin
+switchboard   the chat gateway (optional — see "Chat") — installed at a pin
 ```
+
+Four of the six are built from this repo. The other two are installed with `go
+install` at a pinned version, so a clone of this repo is enough and no sibling
+checkout is assumed; `LOOKOUT_SRC` / `SWITCHBOARD_SRC` build them from source
+instead if you are working on one. `go install pkg@version` resolves in its own
+module context, so this never puts lookout in the agent's `go.mod` — the thing
+`dev/ci/presubmits/deps.sh` exists to prevent.
 
 The one Go package here, `tools/fake-ingress`, is stdlib-only and belongs to
 this repo's module.
@@ -122,7 +126,9 @@ Every one is an env var with a default, in `scripts/common.sh`:
 
 | | |
 |---|---|
-| `SRE_SRC`, `LOOKOUT_SRC`, `SWITCHBOARD_SRC` | Where the sources are. `SRE_SRC` defaults to this repo, one level up; the other two to sibling checkouts. |
+| `LOOKOUT_VERSION`, `SWITCHBOARD_VERSION` | Which release `build.sh` installs. Pinned, not `@latest`. Don't raise `LOOKOUT_VERSION` past `v0.20.0` on its own — see the note in `scripts/common.sh`. |
+| `LOOKOUT_SRC`, `SWITCHBOARD_SRC` | Set either to a checkout to build that binary from source instead of installing it. Empty by default; nothing guesses at a sibling directory. |
+| `SRE_SRC` | Where this repo is. Defaults to one level up, so it resolves relative to the scripts. |
 | `CLUSTER_NAME` | Must start with `sre-demo` — `cluster.sh down` refuses anything else. |
 | `DEMO_NS` | Namespace the workloads go in. |
 | `SLACK_ENV` | Path to the Slack credentials file. Default `scripts/slack.env`; its presence is the real-Slack switch. |

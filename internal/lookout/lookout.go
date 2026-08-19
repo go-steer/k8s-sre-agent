@@ -122,7 +122,8 @@ func spawn(cfg Config) (*exec.Cmd, error) {
 	}
 	resolved, err := exec.LookPath(bin)
 	if err != nil {
-		return nil, fmt.Errorf("lookout: locate %q: %w (build it from ../k8s-lookout or set %s)", bin, err, EnvBinary)
+		return nil, fmt.Errorf("lookout: locate %q: %w (install it with "+
+			"`go install github.com/go-steer/k8s-lookout/cmd/lookout@v0.20.0`, or set %s)", bin, err, EnvBinary)
 	}
 
 	// #nosec G702 -- resolved is exec.LookPath's answer for an operator-set
