@@ -32,24 +32,23 @@ import (
 // runtime and would corrupt both the monitoring diff and any eval scored
 // across the two.
 //
-// The vectors are NOT tracked, and this test skips when they are absent — so
-// on a fresh clone, and in CI, this check does not run. That is deliberate:
-// langchain-samples/sre-agent carries no licence, and vectors produced by
-// executing it are the one artifact in this repo genuinely derived from it.
-// Shipping them would be the strongest form of that derivation, for the
-// weakest reason — the check is just as good run locally.
+// The vectors are tracked, so this runs on a fresh clone and in CI — a change
+// to Fingerprint or NormalizeResourceName cannot land without it firing.
+// Regenerate with `go generate ./internal/monitor` after deliberately changing
+// either (see dev/diffcheck.py, which fetches the pinned commit itself and
+// needs no checkout).
 //
-// The practical consequence is that a change to Fingerprint or
-// NormalizeResourceName can land without this firing. Anyone touching either
-// runs `go generate ./internal/monitor` first (see dev/diffcheck.py, which
-// fetches the pinned commit itself and needs no checkout), and the t.Log at
-// the end names the upstream the vectors came from — evidence of matching
+// They were briefly untracked, in the window where upstream published no
+// licence and output produced by running their code was the one artifact here
+// genuinely derived from that project. langchain-samples/sre-agent#15 added
+// MIT, so the vectors ship again and carry their provenance and terms in the
+// file's "source" block. The t.Log below names them: evidence of matching
 // upstream is worth nothing without saying which upstream.
 func TestGoldenAgainstPython(t *testing.T) {
 	raw, err := os.ReadFile("testdata/golden.json")
 	if errors.Is(err, os.ErrNotExist) {
-		t.Skip("no testdata/golden.json — regenerate with `go generate ./internal/monitor` " +
-			"to run the differential check against upstream (see dev/diffcheck.py)")
+		t.Fatal("testdata/golden.json is missing and is a tracked file — restore it, " +
+			"or regenerate with `go generate ./internal/monitor` (see dev/diffcheck.py)")
 	}
 	if err != nil {
 		t.Fatalf("read golden vectors: %v", err)

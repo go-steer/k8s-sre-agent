@@ -197,10 +197,11 @@ One behaviour is worth checking rather than asserting: finding identity, the
 fingerprint everything downstream keys on, has to agree with the Python or the
 monitoring diff and any cross-implementation comparison quietly go wrong.
 `dev/diffcheck.py` fetches that project at a pinned commit, executes its
-`monitor_state.py` over ~1,000 inputs, and `internal/monitor/golden_test.go`
-replays the answers against this implementation. The generated vectors are not
-tracked in this repo and the test skips without them, so it is a check you run
-(`go generate ./internal/monitor`), not evidence shipped here.
+`monitor_state.py` over 994 inputs, and `internal/monitor/golden_test.go`
+replays the answers against this implementation. The vectors are committed, so
+the comparison runs on every push rather than when someone remembers, and each
+file records the upstream commit, the hash of the file it came from, and its
+licence. `sre-agent` is MIT, Copyright (c) LangChain, Inc.
 
 ## License
 

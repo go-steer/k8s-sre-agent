@@ -22,10 +22,12 @@ evidence of matching a *specific* upstream, so which one has to be written
 down. To adopt a newer upstream, bump the two constants below and regenerate,
 and the diff shows what changed.
 
-The generated file is gitignored on purpose — it is output produced by running
-code that carries no licence, which is the one artifact in this repo genuinely
-derived from that project rather than independently written. The Go test skips
-when it is absent, so this is a check you run, not one CI runs.
+The generated file is committed, so the comparison runs in CI on every push
+rather than only when someone remembers. It was briefly untracked, while
+upstream published no licence and output produced by running their code was
+the one artifact here genuinely derived from that project; they added MIT in
+langchain-samples/sre-agent#15, which settles it. The vectors carry their
+provenance and that licence in the "source" block they are written with.
 
     python3 dev/diffcheck.py --ref main --allow-drift   # see what moved first
     python3 dev/diffcheck.py --src ~/projects/langchain-samples/sre-agent
@@ -60,12 +62,19 @@ import types
 
 UPSTREAM_REPO = "https://github.com/langchain-samples/sre-agent"
 
-# Upstream main as of 2026-08-11. monitor_state.py itself last changed in
-# d593249 ("Add durable state, stateful monitoring, and utilization telemetry",
-# 2026-08-04); the tree pin is what gets fetched, the blob hash is what is
-# actually verified.
-UPSTREAM_COMMIT = "68d351495ecbea759e554da3939b19197fa028cb"
+# Upstream main as of 2026-08-19, the first commit carrying their LICENSE.
+# monitor_state.py itself last changed in d593249 ("Add durable state, stateful
+# monitoring, and utilization telemetry", 2026-08-04) and is byte-identical to
+# the previous pin at 68d3514, so moving the tree pin here changed the metadata
+# and not one vector. The tree pin is what gets fetched, the blob hash is what
+# is actually verified.
+UPSTREAM_COMMIT = "a03bebec0c5ea90b16cee7d1ab4bfe4425895c60"
 MONITOR_STATE_BLOB = "d69b09e4c464b86f74f5ef592c68f9d4e3fc995d"
+
+# Recorded in every generated file. Upstream was unlicensed until 2026-08-19;
+# stamping the terms the vectors were produced under means a reader does not
+# have to date the file to know what applies to it.
+UPSTREAM_LICENSE = "MIT (Copyright (c) LangChain, Inc.)"
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_OUT = os.path.join(REPO_ROOT, "internal", "monitor", "testdata", "golden.json")
@@ -174,6 +183,7 @@ def main():
             "repo": UPSTREAM_REPO,
             "commit": commit or f"(unfetched, --src {src})",
             "monitor_state_blob": blob,
+            "license": UPSTREAM_LICENSE,
             "generated_by": "dev/diffcheck.py",
         },
         "norm": cases,

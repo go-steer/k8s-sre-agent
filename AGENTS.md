@@ -15,21 +15,26 @@ here are either a deliberate match for one of theirs or a documented
 divergence, and the sections below say which. `dev/diffcheck.py` fetches it at
 a pinned commit, so no checkout is needed to work here.
 
-**On provenance, because it constrains what this repo may contain.**
-`langchain-samples/sre-agent` publishes no licence — no `LICENSE` file, no
-SPDX headers, no statement in its README or any `.py`. Absent a grant, the
-default is all rights reserved, so nothing here copies it. What was measured
-before deciding that: across all nine specialist prompts the longest run of
-text shared with theirs is 75 characters, and every instance is the opening
-role sentence ("You are a Kubernetes … specialist."). Our specs run
-4,000–6,800 characters each and are written against lookout's tool surface,
-which that project does not have. `Fingerprint` is the one close structural
-correspondence, and unavoidably so — its entire purpose is byte-compatibility.
-The differential vectors, which *are* produced by executing their code, are
-generated locally and deliberately not tracked; see `.gitignore` and
-`internal/monitor/golden_test.go`. Keep it that way: describe this project as
-inspired by theirs, not as a port of it, and do not commit anything derived
-from running their code.
+**On provenance.** `langchain-samples/sre-agent` is MIT (Copyright (c)
+LangChain, Inc.), added 2026-08-19 in response to
+[their #15](https://github.com/langchain-samples/sre-agent/issues/15), which
+we filed. Before that it published no licence at all — no `LICENSE`, no SPDX
+headers, no statement in the README or any `.py` — and for a day this repo was
+shaped around the assumption that the default therefore applied. The visible
+residue of that day is worth keeping, because the measurement behind it is
+what makes the "inspired by" framing accurate rather than diplomatic: across
+all nine specialist prompts the longest run of text shared with theirs is 75
+characters, and every instance is the opening role sentence ("You are a
+Kubernetes … specialist."). Our specs run 4,000–6,800 characters each and are
+written against lookout's tool surface, which that project does not have.
+`Fingerprint` is the one close structural correspondence, unavoidably so —
+byte-compatibility is its entire purpose.
+
+So the standing rule is now about accuracy rather than licensing: describe
+this project as inspired by theirs, not as a port of it, because that is what
+the overlap measures. MIT does mean the differential vectors can ship, and
+they do — see `internal/monitor/golden_test.go`. Retain the attribution they
+carry.
 
 ## Status
 
@@ -37,11 +42,10 @@ Early. What exists:
 
 - `internal/schema` — the `Finding` / `HealthReport` structured-output
   contract, wire-compatible with upstream's `schemas.py`.
-- `internal/monitor` — stable finding fingerprints, byte-identical to the
-  Python across ~1,000 differential vectors when the check is run. The vectors
-  are generated locally and untracked, so this does not run in CI — regenerate
-  with `go generate ./internal/monitor` before touching `Fingerprint` or
-  `NormalizeResourceName`.
+- `internal/monitor` — stable finding fingerprints, verified byte-identical to
+  the Python across 994 differential vectors. The vectors are tracked, so this
+  runs in CI; regenerate with `go generate ./internal/monitor` after
+  deliberately changing `Fingerprint` or `NormalizeResourceName`.
 - `internal/evals` — the tier-1 eval harness with repaired evaluators.
 - `internal/llm` — the two Vertex model tiers (`claude-sonnet-5` main,
   `claude-haiku-4-5@20251001` subagent).
