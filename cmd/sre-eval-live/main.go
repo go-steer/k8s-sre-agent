@@ -24,7 +24,7 @@
 // prompt, so it can only measure narration and tool selection.
 //
 //	export GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=...
-//	go build -o /tmp/lookout ../k8s-lookout/cmd/lookout
+//	GOBIN=/tmp go install github.com/go-steer/k8s-lookout/cmd/lookout@v0.20.0
 //	SRE_LOOKOUT_BIN=/tmp/lookout go run ./cmd/sre-eval-live -v
 //
 // # Safety

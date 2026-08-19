@@ -92,8 +92,7 @@ Requires Go 1.26+, and a `lookout` binary for anything that reads a real
 cluster.
 
 ```sh
-git clone https://github.com/go-steer/k8s-lookout ../k8s-lookout
-go build -o /tmp/lookout ../k8s-lookout/cmd/lookout
+GOBIN=/tmp go install github.com/go-steer/k8s-lookout/cmd/lookout@v0.20.0
 
 go build ./...
 go test ./...        # hermetic: no cluster, no credentials, no network
@@ -107,8 +106,15 @@ under `-race`, govulncheck, and the dependency invariants — the same scripts
 them need a cluster, credentials or a model.
 
 `mast` is an ordinary module requirement. `k8s-lookout` deliberately is not —
-it is spawned as a subprocess, never linked, so it is built from a checkout
-rather than resolved by the module graph.
+it is spawned as a subprocess, never linked, so it is installed as its own
+binary rather than resolved by this module's graph. `go install pkg@version`
+resolves in its own module context and leaves `go.mod` alone, which is what
+lets `dev/ci/presubmits/deps.sh` keep failing the build if lookout ever does
+enter the graph.
+
+The `v0.20.0` pin is deliberate: v0.21.0 added a `k8s_list_resources` tool and
+`internal/kuberead` still registers one under that name, so the two would
+collide on the same agent. The pin moves when that package goes.
 
 Model calls go to Claude on Vertex AI, and need application-default credentials
 plus a project and location in the environment — `ANTHROPIC_VERTEX_PROJECT_ID`

@@ -1483,11 +1483,11 @@ go run ./cmd/sre-eval -out /tmp/eval.json -concurrency 3 -v
 
 # Tier-2 evals (needs Vertex credentials, docker, kind, and a lookout binary).
 # Creates its own kind cluster, injects the faults, and deletes it on the way
-# out — including on ^C. -keep leaves it up for inspection. lookout is built
-# from a checkout beside this one and never appears in go.mod; see "import,
-# don't fork" for why it is a subprocess.
-git clone https://github.com/go-steer/k8s-lookout ../k8s-lookout
-go build -o /tmp/lookout ../k8s-lookout/cmd/lookout
+# out — including on ^C. -keep leaves it up for inspection. lookout is its own
+# binary and never appears in go.mod; see "import, don't fork" for why it is a
+# subprocess. The pin is not cosmetic: v0.21.0 added k8s_list_resources, which
+# internal/kuberead already registers under that name.
+GOBIN=/tmp go install github.com/go-steer/k8s-lookout/cmd/lookout@v0.20.0
 SRE_LOOKOUT_BIN=/tmp/lookout go run ./cmd/sre-eval-live -out /tmp/eval-live.json -v
 
 # Tier 3: one read-only assessment of a cluster that already exists. Substitute

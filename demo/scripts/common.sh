@@ -30,11 +30,38 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$ROOT/bin"
 RUN="$ROOT/run"
 
-# Where the sources are. The agent is this repo, one level up; the other two
-# are sibling checkouts. Override if yours live elsewhere.
+# Where the sources are. The agent is this repo, one level up.
 SRE_SRC="${SRE_SRC:-$ROOT/..}"
-LOOKOUT_SRC="${LOOKOUT_SRC:-$ROOT/../../k8s-lookout}"
-SWITCHBOARD_SRC="${SWITCHBOARD_SRC:-$ROOT/../../switchboard}"
+
+# The other two binaries come from released modules, so cloning this repo is
+# enough to run the demo. They used to default to sibling checkouts at
+# ../../k8s-lookout and ../../switchboard, which worked on exactly one machine.
+#
+# Pinned rather than @latest, for the same reason nothing here resolves an
+# ambient kubectl context: a build whose inputs depend on what happens to be on
+# disk, or on what upstream tagged this morning, is not a build you can compare
+# against yesterday's.
+LOOKOUT_MODULE="github.com/go-steer/k8s-lookout"
+SWITCHBOARD_MODULE="github.com/go-steer/switchboard"
+
+# lookout is held at v0.20.0 deliberately — do not raise it on its own.
+# v0.21.0 added k8s_list_resources, and internal/kuberead already registers a
+# tool by that exact name (kuberead.go:81), which the cluster-facing commands
+# attach as a second toolset. Installing v0.21.0 while that package still
+# exists puts two tools with one name on the same agent. Raise this to v0.21.0
+# in the same change that deletes internal/kuberead and drops `server:
+# kuberead` from the nine specs.
+LOOKOUT_VERSION="${LOOKOUT_VERSION:-v0.20.0}"
+
+# switchboard has no tags yet, so the pin is a pseudo-version. Swap it for a
+# real one the moment go-steer/switchboard cuts a release.
+SWITCHBOARD_VERSION="${SWITCHBOARD_VERSION:-v0.0.0-20260819120633-a6e51f013566}"
+
+# Set either of these to a checkout to build that binary from source instead of
+# installing it — for working on lookout or switchboard alongside this repo.
+# Empty means "use the pin"; nothing here guesses at a sibling directory.
+LOOKOUT_SRC="${LOOKOUT_SRC:-}"
+SWITCHBOARD_SRC="${SWITCHBOARD_SRC:-}"
 
 # The throwaway cluster. The prefix is load-bearing: cluster.sh down refuses
 # any name without it, so a typo cannot delete a cluster somebody needs.

@@ -54,8 +54,8 @@ env:
                    (default 1). Two cycles against a cluster you have pinned
                    is the only way to separate agent variance from cluster
                    drift — see note 3 at the end.
-  SRE_LOOKOUT_BIN  an existing lookout binary; otherwise one is built from
-                   ../k8s-lookout
+  SRE_LOOKOUT_BIN  an existing lookout binary; otherwise one is installed at
+                   LOOKOUT_VERSION (default v0.20.0) into SMOKE_WORKDIR
 EOF
 	exit 2
 fi
@@ -91,18 +91,20 @@ if [[ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}${GOOGLE_CLOUD_PROJECT:-}" ]]; then
 fi
 pass "Vertex project configured"
 
-# lookout is a runtime dependency, spawned over stdio MCP. It is deliberately
-# not in go.mod (it would drag ADK v1 into an ADK v2 binary), so it has to be
-# built separately or pointed at.
+# lookout is a runtime dependency, spawned over stdio MCP, and deliberately not
+# in go.mod — see dev/ci/presubmits/deps.sh. So it has to be installed
+# separately or pointed at. Pinned to the same version the demo installs, and
+# for the same reason: v0.21.0's k8s_list_resources collides with the tool
+# internal/kuberead registers under that name.
+LOOKOUT_VERSION="${LOOKOUT_VERSION:-v0.20.0}"
 if [[ -n "${SRE_LOOKOUT_BIN:-}" && -x "${SRE_LOOKOUT_BIN}" ]]; then
 	pass "lookout: $SRE_LOOKOUT_BIN"
-elif [[ -d "$REPO/../k8s-lookout" ]]; then
-	echo "  building lookout from ../k8s-lookout ..."
-	(cd "$REPO/../k8s-lookout" && go build -o "$WORKDIR/lookout" ./cmd/lookout)
-	export SRE_LOOKOUT_BIN="$WORKDIR/lookout"
-	pass "lookout built: $SRE_LOOKOUT_BIN"
 else
-	fail "no lookout binary — set SRE_LOOKOUT_BIN or check out ../k8s-lookout"
+	echo "  installing lookout $LOOKOUT_VERSION ..."
+	GOBIN="$WORKDIR" go install "github.com/go-steer/k8s-lookout/cmd/lookout@$LOOKOUT_VERSION" \
+		|| fail "go install lookout@$LOOKOUT_VERSION failed — set SRE_LOOKOUT_BIN to a binary you already have"
+	export SRE_LOOKOUT_BIN="$WORKDIR/lookout"
+	pass "lookout installed: $SRE_LOOKOUT_BIN"
 fi
 
 # ------------------------------------------------------------------- build
